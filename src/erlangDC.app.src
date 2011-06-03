@@ -1,0 +1,12 @@
+{application, erlangDC,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { erlangDC_app, []}},
+  {env, []}
+ ]}.
