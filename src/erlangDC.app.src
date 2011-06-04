@@ -2,7 +2,7 @@
  [
   {description, ""},
   {vsn, "1"},
-  {registered, []},
+  {registered, [erlangDC_app, dc_server]},
   {applications, [
                   kernel,
                   stdlib
