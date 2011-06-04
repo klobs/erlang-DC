@@ -2,12 +2,15 @@
 
 -behaviour(gen_server).
 
+-include("dc_server.hrl").
+
 -export([start_link/0]).
 
 %callbacks for gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+% basic definitions
 -define(DEFAULTPORT, 6867).
 -define(TCPOPTIONS, [binary, {packet, 0}, {active, false},{reuseaddr, true}]).
 
@@ -48,7 +51,6 @@ listen() ->
 
 accept(LSock) ->
     {ok, Sock} = gen_tcp:accept(LSock),
-	gen_tcp:close(Sock),
-	spawn(connection, listen, [Sock]),
+	spawn(connection, welcome, [Sock]),
 	accept(LSock).
 		
