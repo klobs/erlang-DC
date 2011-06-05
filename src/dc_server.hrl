@@ -40,3 +40,12 @@
 						{?FEATURE_VPL, ?VPL_FIXED},
 						{?FEATURE_EQR, ?EQR_MUST_NOT_HAPPEN}
 					]).
+%% Records
+-record(participant, {  participantid    = undefined,
+						userid           = undefined,
+						sig              = undefined,
+						diffiehellman    = undefined,
+						diffiehellmansig = undefined}).
+
+-record(participant_mgmt, { participant = #participant{}, 
+							socket = undefined}).

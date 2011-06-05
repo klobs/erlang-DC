@@ -23,34 +23,59 @@
 %% Message parsing (only messages from participant ->  server)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%% Register At Service
+%% Register at service
+parseMessage(TypeBin, << PidLen:8, Pid:PidLen/binary, UidLen:8, Uid:UidLen/binary, 
+		 	SigLen:16, Sig:SigLen/binary, DHLen:16, DH:DHLen/binary, DHSigLen:16, 
+			DHSig:DHSigLen/binary >>) when TypeBin =:= ?REGISTERATSERVICE ->
+				{ok, #participant{   participantid    = Pid,
+								userid           = Uid,
+								sig              = Sig,
+								diffiehellman    = DH,
+								diffiehellmansig = DHSig}};
+
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?REGISTERATSERVICE ->
-	io:format("Register at service"),
-	ok;
+	io:format("Malformed Register at service message~n"),
+	{error, malformed};
+
+%% Inforequest
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?INFOREQ ->
 	io:format("Inforequest"),
 	ok;
+
+%% Info
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?INFO ->
 	io:format("Info"),
 	ok;
+
+%% Join Workcycle
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?JOINWORKCYCLE ->
 	io:format("Join Workcycle"),
-	ok;
+	ok;	
+
+%% ADD
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?ADD ->
 	io:format("ADD"),
 	ok;
+
+%% ADD RESERVATION
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?ADDRESERVATION ->
 	io:format("ADDRESERVATION"),
 	ok;
+
+%% Leave workcycle
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?LEAVEWORKCYCLE ->
 	io:format("LEAVEWORKCYCLE"),
 	ok;
+
+%% Quit service
 parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?QUITSERVICE ->
 	io:format("QUITSERVICE"),
 	ok;
+
+%% Anything else
 parseMessage(TypeBin, _MsgBin) when is_binary(TypeBin)->
 	<<Type:16/integer-signed>> = TypeBin,
-	io:format("Unkown/unhandled message type: ~B!~n",[Type]),
+	io:format("This type of message should not be sent to this DC Server: ~B!~n",[Type]),
 	ok;
 parseMessage(_, _) ->
 	io:format("Unkown everything!~n"),
