@@ -14,8 +14,8 @@ welcome(Sock) ->
 							<<Length:16/integer-signed>> = LengthBin,
 								case gen_tcp:recv(Sock, Length, 100) of
 									{ok, MsgBin} -> 
-										{registerAtService, Part} = management_message:parseMessage(MsgTypeBin, MsgBin),
-										participant_manager:register_participant(Part, Sock),
+										{register_at_service, Part} = management_message:parse_message(MsgTypeBin, MsgBin),
+										participant_manager:register_participant(Part, self()),
 										listen(Sock, Part),
 										ok;
 									{error,Reason} -> {error, Reason}       
@@ -30,4 +30,41 @@ welcome(Sock) ->
 			{error, Reason}
 	end.
 
+listen(Sock, Part) ->
+	inet:setopts(Sock,[{active,once}, {keepalive, true}]),
+	receive
+		%% messages that can be received by the socket
+		{tcp, Sock, <<MsgType:16, MsgLen:16, MsgBin:MsgLen/binary>>} ->
+			case management_message:parse_message(<<MsgType:16>>, MsgBin) of
+				{irq, Irq} -> 
+					handle_irq(Irq);
+				{error, Reason} -> 
+					io:format("Parseerror happended during message parsing: ~w!~n",[Reason])
+			end,
+			listen(Sock, Part);
+		{tcp_closed,Sock} ->
+			io:format("Socket closed, unregistering participant~n"),
+			participant_manager:unregister_participant(Part),
+			ok;
+		{tcp, Sock, Data} ->
+			io:format("Arbritrary message on Socket ~w: ~w ~n", [Sock, Data]),
+			listen(Sock,Part);
+
+		%% Messages from other processes to forward to the socket
+		{forward, Msg} when is_binary(Msg)->
+			gen_tcp:send(Sock, Msg),
+			listen(Sock, Part);
+
+		_ ->
+			io:format("Arbritrary message on Socket ~w ~n", [Sock]),
+			listen(Sock,Part)
+	end.
+
+
+handle_irq(passivelist) ->
+	participant_manager:send_passive_partlist(self());
+handle_irq(activelist) ->
+	participant_manager:send_active_partlist(self());
+handle_irq(_) ->
+	ok.
 

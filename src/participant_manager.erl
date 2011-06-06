@@ -11,9 +11,13 @@
 
 
 %% API
--export([start_link/0,
+-export([get_passive_participant_list/0,
 		register_participant/2,
-		passive_participant_count/0]).
+		passive_participant_count/0,
+		send_active_partlist/1,
+		send_passive_partlist/1,
+		start_link/0,
+		unregister_participant/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -28,14 +32,26 @@
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-start_link() ->
-  gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
-
-register_participant(Part, Sock) ->
-	gen_server:cast(?MODULE, {register, {Part, Sock}}).
+get_passive_participant_list() ->
+	gen_server:call(?MODULE, get_passive_participant_list).
 
 passive_participant_count() ->
 	gen_server:call(?MODULE, count_passive_participants).
+
+register_participant(Part, Controller) ->
+	gen_server:cast(?MODULE, {register, {Part, Controller}}).
+
+send_active_partlist(Controller) ->
+	gen_server:cast(?MODULE, {send_active_partlist, Controller}).
+
+send_passive_partlist(Controller) ->
+	gen_server:cast(?MODULE, {send_passive_partlist, Controller}).
+
+start_link() ->
+  gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+unregister_participant(Part) ->
+	gen_server:cast(?MODULE, {unregister, Part}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -51,6 +67,7 @@ passive_participant_count() ->
 init(_) ->
 	mnesia:create_table(participant_mgmt, 
 		[{attributes, record_info(fields,participant_mgmt)}]),
+	mnesia:add_table_index(participant_mgmt, active_from),
 	{ok, state}.
 
 %%--------------------------------------------------------------------
@@ -62,9 +79,11 @@ init(_) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
+
 handle_call(count_passive_participants, _From, State) ->
 	Reply = mnesia:table_info(participant_mgmt, size),
 	{reply, Reply, State};
+
 handle_call(_Request, _From, State) ->
 	Reply = ok,
 	{reply, Reply, State}.
@@ -76,19 +95,35 @@ handle_call(_Request, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 
-handle_cast({register, {Part, Sock}}, State) -> % where is_record(Part, participant) ->
+handle_cast({register, {Part, Controller}}, State) when is_record(Part, participant) ->
 	M = management_message:accepted4service(true),
-	gen_tcp:send(Sock, M),
-	PMI = #participant_mgmt{ participant = Part, socket = Sock },
+	Controller ! {forward, M},
+	%gen_tcp:send(Sock, M),
+	PMI = #participant_mgmt{ participant = Part, controller = Controller },
 	T = fun() ->
 		mnesia:write(PMI),
 		ok
 		end,
 	case mnesia:transaction(T) of
-		{atomic, ok} -> io:format("Registered~n");
-		_ -> io:format("Problems while registering~n")
+		{atomic, ok} -> 
+			{noreply, State};
+		_ -> io:format("Problems while registering~n"),
+			{noreply, State}
+	end;
+
+handle_cast({unregister, Part}, State) when is_record(Part, participant) ->
+	case mnesia:dirty_delete(participant_mgmt, Part) of
+		ok -> io:format("Unregistered a participant~n");
+		Error  -> io:format("Problems while unregistering: ~w ~n", [Error])
 	end,
 	{noreply, State};
+
+handle_cast({send_passive_partlist, Controller}, State) ->
+	PartList = mnesia:dirty_all_keys(participant_mgmt),
+	Msg = management_message:info_passive_partlist(PartList),
+	Controller ! {forward, Msg},
+	{noreply, State};	
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 

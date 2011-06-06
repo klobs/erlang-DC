@@ -1,7 +1,13 @@
 -module(management_message).
 -include("dc_server.hrl").
--export([parseMessage/2,
+
+%% For inbound messages
+-export([parse_message/2]).
+
+%% For outbound messages
+-export([
 		accepted4service/1,
+		info_passive_partlist/1,
 		welcome2service/5]).
 
 -define(WELCOME2SERVICE   , <<0:16>>).  % S->P
@@ -20,68 +26,75 @@
 -define(QUITSERVICE       , <<13:16>>). % P->S
 -define(KTHXBYE           , <<14:16>>). % S->P
 
+-define(IRQ_PASSIVEPARTICIPANTLIST , 0).
+-define(IRQ_ACTIVEPARTICIPANTLIST  , 1).
+
+-define(INFO_PASSIVEPARTICIPANTLIST , 0).
+-define(INFO_ACTIVEPARTICIPANTLIST  , 1).
+-define(INFO_UPDATEACTIVEJOINING    , 2).
+-define(INFO_UPDATEACTIVELEAVING    , 3).
+-define(INFO_COMMITKEYEXCHANGE      , 4).
+-define(INFO_EARLYQUITNOTIFICATION  , 5).
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Message parsing (only messages from participant ->  server)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Register at service
-parseMessage(TypeBin, << PidLen:8, Pid:PidLen/binary, UidLen:8, Uid:UidLen/binary, 
+parse_message(TypeBin, << PidLen:8, Pid:PidLen/binary, UidLen:8, Uid:UidLen/binary, 
 		 	SigLen:16, Sig:SigLen/binary, DHLen:16, DH:DHLen/binary, DHSigLen:16, 
-			DHSig:DHSigLen/binary >>) when TypeBin =:= ?REGISTERATSERVICE ->
-				{registerAtService, #participant{   
+			DHSig:DHSigLen/binary >>) when TypeBin == ?REGISTERATSERVICE ->
+				{register_at_service, #participant{   
 								participantid    = Pid,
 								userid           = Uid,
 								sig              = Sig,
 								diffiehellman    = DH,
 								diffiehellmansig = DHSig}};
-
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?REGISTERATSERVICE ->
-	io:format("Malformed Register at service message~n"),
-	{error, malformed};
+parse_message(TypeBin, _MsgBin) when TypeBin == ?REGISTERATSERVICE ->
+	{error, malformed_register_at_service};
 
 %% Inforequest
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?INFOREQ ->
-	io:format("Inforequest"),
-	ok;
+parse_message(TypeBin, <<InfoServiceRequest:16>>) when TypeBin == ?INFOREQ ->
+	case InfoServiceRequest of
+		?IRQ_PASSIVEPARTICIPANTLIST ->
+			{irq, passivelist};
+		?IRQ_ACTIVEPARTICIPANTLIST ->
+			{irq, activelist}
+	end;
+parse_message(TypeBin, _MsgBin) when TypeBin == ?INFOREQ ->
+	{error, malformed_inforequest};
 
 %% Info
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?INFO ->
-	io:format("Info"),
-	ok;
+parse_message(TypeBin, _MsgBin) when TypeBin == ?INFO ->
+	{error, unimplemented_info};
 
 %% Join Workcycle
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?JOINWORKCYCLE ->
-	io:format("Join Workcycle"),
-	ok;	
+parse_message(TypeBin, _MsgBin) when TypeBin == ?JOINWORKCYCLE ->
+	{error, unimplemented_joinworkcycle};	
 
 %% ADD
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?ADD ->
-	io:format("ADD"),
-	ok;
+parse_message(TypeBin, _MsgBin) when TypeBin == ?ADD ->
+	{error, unimplemented_add};
 
 %% ADD RESERVATION
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?ADDRESERVATION ->
-	io:format("ADDRESERVATION"),
-	ok;
+parse_message(TypeBin, _MsgBin) when TypeBin == ?ADDRESERVATION ->
+	{error, unimplemented_addreservation};
 
 %% Leave workcycle
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?LEAVEWORKCYCLE ->
-	io:format("LEAVEWORKCYCLE"),
-	ok;
+parse_message(TypeBin, _MsgBin) when TypeBin == ?LEAVEWORKCYCLE ->
+	{error, unimplemented_leaveworkcycle};
 
 %% Quit service
-parseMessage(TypeBin, _MsgBin) when TypeBin =:= ?QUITSERVICE ->
-	io:format("QUITSERVICE"),
-	ok;
+parse_message(TypeBin, _MsgBin) when TypeBin == ?QUITSERVICE ->
+	{error, unimplemented_quitservice};
 
-%% Anything else
-parseMessage(TypeBin, _MsgBin) when is_binary(TypeBin)->
-	<<Type:16/integer-signed>> = TypeBin,
-	io:format("This type of message should not be sent to this DC Server: ~B!~n",[Type]),
-	ok;
-parseMessage(_, _) ->
-	io:format("Unkown everything!~n"),
-	error.
+% Anything else
+
+parse_message(TypeBin, _MsgBin) when is_binary(TypeBin)->
+	{error, unkown_messagetype};
+parse_message(_, _) ->
+	{error, unkown_error}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Messages from perver -> participant
@@ -104,3 +117,27 @@ accepted4service(_) ->
 	RejectedSize = byte_size(Rejected),
 	list_to_binary([?ACCEPTED4SERVICE, <<RejectedSize:16>>, Rejected]).
 	
+info_passive_partlist(PartList) when is_list(PartList) ->
+	LengthList = length(PartList),
+	InfoHead = << ?INFO_PASSIVEPARTICIPANTLIST:16, LengthList:16>>,
+	InfoList = lists:flatmap(fun(X) -> 
+								#participant{   participantid=Pid, 
+												userid=Uid, 
+												sig=Sig, 
+												diffiehellman=DH, 
+												diffiehellmansig=DHSig} = X,
+								PidSize = size(Pid), UidSize = size(Uid),
+								SigSize = size(Sig), DHSize = size(DH),
+								DHSigSize = size(DHSig),
+								[<< PidSize:16, Pid:PidSize/binary, 
+									UidSize:16, Uid:UidSize/binary,
+									SigSize:16, Sig:SigSize/binary,
+									DHSize:16, DH:DHSize/binary,
+									DHSigSize:16, DHSig:DHSigSize/binary>>]
+								end, PartList),
+	io:format("There are ~w participants in my generated list~n", [LengthList]),
+	TotalSize = size(list_to_binary([InfoHead,InfoList])),
+	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]);
+info_passive_partlist(_) ->
+	<< >>.
+

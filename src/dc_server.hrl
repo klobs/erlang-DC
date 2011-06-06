@@ -48,6 +48,6 @@
 						diffiehellmansig = undefined}).
 
 -record(participant_mgmt, { participant  = #participant{},
-							socket       = undefined,
+							controller   = undefined,
 							active_from  = -1,
 							active_until = -1}).
