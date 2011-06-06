@@ -12,7 +12,12 @@
 
 % basic definitions
 -define(DEFAULTPORT, 6867).
--define(TCPOPTIONS, [binary, {packet, 0}, {active, false},{reuseaddr, true}]).
+-define(TCPOPTIONS, [binary, 
+					{packet, 0}, 
+					{active, false}, 
+					{reuseaddr, true}, 
+					{packet_size, 65540}, 
+					{send_timeout_close, true}]).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -51,6 +56,7 @@ listen() ->
 
 accept(LSock) ->
     {ok, Sock} = gen_tcp:accept(LSock),
-	spawn(connection, welcome, [Sock]),
+	Controller = spawn(connection, welcome, [Sock]),
+	gen_tcp:controlling_process(Sock, Controller),
 	accept(LSock).
 		
