@@ -47,5 +47,5 @@
 						diffiehellman    = undefined,
 						diffiehellmansig = undefined}).
 
--record(participant_mgmt, { participant = #participant{}, 
-							socket = undefined}).
+-record(participant_mgmt, { participant = #participant{},
+							socket      = undefined}).

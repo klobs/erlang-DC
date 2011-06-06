@@ -10,6 +10,8 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+	mnesia:create_schema([node()]),
+	mnesia:start(),
 	case erlangDC_sup:start_link() of
 		{ok, Pid} -> 
 			gen_server:cast(dc_server, listen),

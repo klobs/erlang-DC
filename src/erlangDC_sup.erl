@@ -24,6 +24,7 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
- 	Server = ?CHILD(dc_server, worker),
-    {ok, { {one_for_all, 4, 10}, [Server]} }.
+ 	Server             = ?CHILD(dc_server, worker),
+ 	ParticipantManager = ?CHILD(participant_manager, worker),
+    {ok, { {one_for_all, 4, 10}, [Server, ParticipantManager]} }.
 

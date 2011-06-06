@@ -1,6 +1,7 @@
 -module(management_message).
 -include("dc_server.hrl").
 -export([parseMessage/2,
+		accepted4service/1,
 		welcome2service/5]).
 
 -define(WELCOME2SERVICE   , <<0:16>>).  % S->P
@@ -81,9 +82,24 @@ parseMessage(_, _) ->
 	io:format("Unkown everything!~n"),
 	error.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Messages from perver -> participant
-welcome2service(Version, SymbolLength, ParticipantCount, AcceptReject, FeatureArray) ->
-    FeatureBin = << <<X:16, Y:16>> || {X, Y} <- FeatureArray >>,
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Welcome 2 Service
+welcome2service(Version, SymbolLength, ParticipantCount, AcceptReject, FeatureList) ->
+    FeatureBin = << <<X:16, Y:16>> || {X, Y} <- FeatureList >>,
 	MsgTail = list_to_binary([<< Version:16, SymbolLength:16, ParticipantCount:16, AcceptReject:16 >>, FeatureBin]),
 	TailSize = byte_size(MsgTail),
 	list_to_binary([?WELCOME2SERVICE, << TailSize:16>>,  MsgTail]).
+
+%% Accepted 4 Service
+accepted4service(true) ->
+	Accepted = <<0:8>>,	
+	AccceptedSize = byte_size(Accepted),
+	list_to_binary([?ACCEPTED4SERVICE, <<AccceptedSize:16>>, Accepted]);
+accepted4service(_) ->
+	Rejected = <<1:8>>,
+	RejectedSize = byte_size(Rejected),
+	list_to_binary([?ACCEPTED4SERVICE, <<RejectedSize:16>>, Rejected]).
+	
