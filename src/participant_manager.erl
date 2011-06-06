@@ -12,7 +12,8 @@
 
 %% API
 -export([start_link/0,
-		register_participant/2]).
+		register_participant/2,
+		passive_participant_count/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -32,6 +33,9 @@ start_link() ->
 
 register_participant(Part, Sock) ->
 	gen_server:cast(?MODULE, {register, {Part, Sock}}).
+
+passive_participant_count() ->
+	gen_server:call(?MODULE, count_passive_participants).
 
 %%====================================================================
 %% gen_server callbacks
@@ -58,12 +62,12 @@ init(_) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-%handle_call(count_passive_participants, _From, State) ->
-%  Reply = mnesia:table_info(participant_mgmt, size),
-%  {reply, Reply, State}.
+handle_call(count_passive_participants, _From, State) ->
+	Reply = mnesia:table_info(participant_mgmt, size),
+	{reply, Reply, State};
 handle_call(_Request, _From, State) ->
-  Reply = ok,
-  {reply, Reply, State}.
+	Reply = ok,
+	{reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
@@ -77,9 +81,13 @@ handle_cast({register, {Part, Sock}}, State) -> % where is_record(Part, particip
 	gen_tcp:send(Sock, M),
 	PMI = #participant_mgmt{ participant = Part, socket = Sock },
 	T = fun() ->
-		mnesia:write(PMI)
+		mnesia:write(PMI),
+		ok
 		end,
-	mnesia:transaction(T),
+	case mnesia:transaction(T) of
+		{atomic, ok} -> io:format("Registered~n");
+		_ -> io:format("Problems while registering~n")
+	end,
 	{noreply, State};
 handle_cast(_Msg, State) ->
 	{noreply, State}.

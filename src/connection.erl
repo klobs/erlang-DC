@@ -3,7 +3,8 @@
 -export([welcome/1]).
 
 welcome(Sock) ->
-	W2M = management_message:welcome2service(?PROTOCOL_VERSION, ?SYMBOL_LENGTH,0,0, ?FEATURE_LIST),
+	NumPart = participant_manager:passive_participant_count(),
+	W2M = management_message:welcome2service(?PROTOCOL_VERSION, ?SYMBOL_LENGTH,NumPart, 0, ?FEATURE_LIST),
 	case gen_tcp:send(Sock, W2M) of
 		ok -> 
 			case gen_tcp:recv(Sock, 2, 2000) of
