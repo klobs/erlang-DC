@@ -2,3 +2,4 @@
 ebin/
 *.swp
 *.config
+Mnesia.nonode@nohost/
