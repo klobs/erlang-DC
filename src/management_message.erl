@@ -71,7 +71,7 @@ parse_message(TypeBin, _MsgBin) when TypeBin == ?INFO ->
 
 %% Join Workcycle
 parse_message(TypeBin, _MsgBin) when TypeBin == ?JOINWORKCYCLE ->
-	{error, unimplemented_joinworkcycle};	
+	{joinworkcycle};
 
 %% ADD
 parse_message(TypeBin, _MsgBin) when TypeBin == ?ADD ->
@@ -118,26 +118,32 @@ accepted4service(_) ->
 	list_to_binary([?ACCEPTED4SERVICE, <<RejectedSize:16>>, Rejected]).
 	
 info_passive_partlist(PartList) when is_list(PartList) ->
-	LengthList = length(PartList),
-	InfoHead = << ?INFO_PASSIVEPARTICIPANTLIST:16, LengthList:16>>,
-	InfoList = lists:flatmap(fun(X) -> 
-								#participant{   participantid=Pid, 
-												userid=Uid, 
-												sig=Sig, 
-												diffiehellman=DH, 
-												diffiehellmansig=DHSig} = X,
-								PidSize = size(Pid), UidSize = size(Uid),
-								SigSize = size(Sig), DHSize = size(DH),
-								DHSigSize = size(DHSig),
-								[<< PidSize:16, Pid:PidSize/binary, 
-									UidSize:16, Uid:UidSize/binary,
-									SigSize:16, Sig:SigSize/binary,
-									DHSize:16, DH:DHSize/binary,
-									DHSigSize:16, DHSig:DHSigSize/binary>>]
-								end, PartList),
-	io:format("There are ~w participants in my generated list~n", [LengthList]),
+	InfoHead = << ?INFO_PASSIVEPARTICIPANTLIST:16>>,
+	InfoList = participantlist(PartList),
 	TotalSize = size(list_to_binary([InfoHead,InfoList])),
 	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]);
 info_passive_partlist(_) ->
 	<< >>.
+
+%% Returns first two bytes of how many participants are in the list,
+%% followed by the five tupled participants.
+participantlist(PartList) ->
+	LengthList = length(PartList),
+	ListHead = << LengthList:16 >>,
+	ListMeat = lists:flatmap(fun(X) -> 
+					#participant{   participantid=Pid, 
+									userid=Uid, 
+									sig=Sig, 
+									diffiehellman=DH, 
+									diffiehellmansig=DHSig} = X,
+					PidSize = size(Pid), UidSize = size(Uid),
+					SigSize = size(Sig), DHSize = size(DH),
+					DHSigSize = size(DHSig),
+					[<< PidSize:16, Pid:PidSize/binary, 
+						UidSize:16, Uid:UidSize/binary,
+						SigSize:16, Sig:SigSize/binary,
+						DHSize:16, DH:DHSize/binary,
+						DHSigSize:16, DHSig:DHSigSize/binary>>]
+					end, PartList),
+	list_to_binary([ListHead, ListMeat]).
 
