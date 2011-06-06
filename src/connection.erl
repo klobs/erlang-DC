@@ -14,8 +14,9 @@ welcome(Sock) ->
 							<<Length:16/integer-signed>> = LengthBin,
 								case gen_tcp:recv(Sock, Length, 100) of
 									{ok, MsgBin} -> 
-										{ok, Part} =management_message:parseMessage(MsgTypeBin, MsgBin),
+										{registerAtService, Part} = management_message:parseMessage(MsgTypeBin, MsgBin),
 										participant_manager:register_participant(Part, Sock),
+										listen(Sock, Part),
 										ok;
 									{error,Reason} -> {error, Reason}       
 								end;

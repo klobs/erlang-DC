@@ -28,7 +28,8 @@
 parseMessage(TypeBin, << PidLen:8, Pid:PidLen/binary, UidLen:8, Uid:UidLen/binary, 
 		 	SigLen:16, Sig:SigLen/binary, DHLen:16, DH:DHLen/binary, DHSigLen:16, 
 			DHSig:DHSigLen/binary >>) when TypeBin =:= ?REGISTERATSERVICE ->
-				{ok, #participant{   participantid    = Pid,
+				{registerAtService, #participant{   
+								participantid    = Pid,
 								userid           = Uid,
 								sig              = Sig,
 								diffiehellman    = DH,
