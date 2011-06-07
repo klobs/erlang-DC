@@ -112,9 +112,14 @@ handle_cast({register, {Part, Controller}}, State) when is_record(Part, particip
 	end;
 
 handle_cast({unregister, Part}, State) when is_record(Part, participant) ->
-	case mnesia:dirty_delete(participant_mgmt, Part) of
-		ok -> io:format("Unregistered a participant~n");
-		Error  -> io:format("Problems while unregistering: ~w ~n", [Error])
+	T = fun() ->
+			mnesia:delete({participant_mgmt, Part})
+		end,
+	case mnesia:transaction(T) of
+		{atomic, Ok} ->
+			io:format("Unregistered a participant~n");
+		Error ->
+			io:format("~p~n",[Error])
 	end,
 	{noreply, State};
 
