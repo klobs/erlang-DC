@@ -5,23 +5,23 @@
 %%%
 %%% Created :  5 Sep 2008 by Mitchell Hashimoto <mitchell.hashimoto@gmail.com>
 %%%-------------------------------------------------------------------
--module(participant_manager).
+-module(round_manager).
+-include_lib("stdlib/include/qlc.hrl").
 -include("dc_server.hrl").
 -behaviour(gen_server).
 
-
 %% API
--export([get_passive_participant_list/0,
-		register_participant/2,
-		passive_participant_count/0,
-		send_active_partlist/1,
-		send_passive_partlist/1,
+-export([join_workcycle/2,
 		start_link/0,
-		unregister_participant/1]).
+		start_next_workcycle/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
+
+-record(state, {current_workcycle= 0,
+				participants_joining = [],
+				participants_leaving = []}).
 
 -define(SERVER, ?MODULE).
 
@@ -32,26 +32,17 @@
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-get_passive_participant_list() ->
-	gen_server:call(?MODULE, get_passive_participant_list).
 
-passive_participant_count() ->
-	gen_server:call(?MODULE, count_passive_participants).
-
-register_participant(Part, Controller) ->
-	gen_server:cast(?MODULE, {register, {Part, Controller}}).
-
-send_active_partlist(Controller) ->
-	gen_server:cast(?MODULE, {send_active_partlist, Controller}).
-
-send_passive_partlist(Controller) ->
-	gen_server:cast(?MODULE, {send_passive_partlist, Controller}).
+join_workcycle(Part, Controller) when is_record(Part, participant) and is_pid(Controller) ->
+	gen_server:cast(?MODULE, {joinworkcycle, {Part, Controller}});		
+join_workcycle(_, _) ->
+	{error, badargs}.
 
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-unregister_participant(Part) ->
-	gen_server:cast(?MODULE, {unregister, Part}).
+start_next_workcycle() ->
+	gen_server:cast(?MODULE, start_next_workcycle).
 
 %%====================================================================
 %% gen_server callbacks
@@ -64,11 +55,8 @@ unregister_participant(Part) ->
 %%                         {stop, Reason}
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
-init(_) ->
-	mnesia:create_table(participant_mgmt, 
-		[{attributes, record_info(fields,participant_mgmt)}]),
-	mnesia:add_table_index(participant_mgmt, active_from),
-	{ok, state}.
+init([]) ->
+  {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -79,14 +67,9 @@ init(_) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-
-handle_call(count_passive_participants, _From, State) ->
-	Reply = mnesia:table_info(participant_mgmt, size),
-	{reply, Reply, State};
-
 handle_call(_Request, _From, State) ->
-	Reply = ok,
-	{reply, Reply, State}.
+  Reply = ok,
+  {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
@@ -95,39 +78,34 @@ handle_call(_Request, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 
-handle_cast({register, {Part, Controller}}, State) when is_record(Part, participant) ->
-	M = management_message:accepted4service(true),
-	Controller ! {forward, M},
-	%gen_tcp:send(Sock, M),
-	PMI = #participant_mgmt{ participant = Part, controller = Controller },
-	T = fun() ->
-		mnesia:write(PMI),
-		ok
+handle_cast({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
+	PartJoining = State#state.participants_joining,
+	NewPartJoining = [PartController | PartJoining], 
+	NewState = State#state{participants_joining = NewPartJoining},
+	CurrentWorkCycle = State#state.current_workcycle,
+	AT = fun() ->
+			qlc:e(
+			  qlc:q([ 1 || X <- mnesia:table(participant_mgmt), 
+									X#participant_mgmt.active_from =< CurrentWorkCycle,
+									X#participant_mgmt.active_from >= 0
+									]))
 		end,
-	case mnesia:transaction(T) of
-		{atomic, ok} -> 
-			{noreply, State};
-		_ -> io:format("Problems while registering~n"),
-			{noreply, State}
-	end;
+	{atomic, AList} = mnesia:transaction(AT),
+	case (length(AList) >= ?MIN_ACTIVE_PARTICIPANTS) of
+		true -> 
+			{noreply, NewState};
+		false ->
+			case (length(NewPartJoining) >= ?MIN_ACTIVE_PARTICIPANTS) of
+				true -> start_next_workcycle(), 
+						{noreply, NewState};
+				false -> 
+						{noreply, NewState}
+				end
+		end;
 
-handle_cast({unregister, Part}, State) when is_record(Part, participant) ->
-	T = fun() ->
-			mnesia:delete({participant_mgmt, Part})
-		end,
-	case mnesia:transaction(T) of
-		{atomic, ok} ->
-			io:format("Unregistered a participant~n");
-		Error ->
-			io:format("~p~n",[Error])
-	end,
+handle_cast(start_next_workcycle, State) ->
+	io:format("Starting next workcycle"),
 	{noreply, State};
-
-handle_cast({send_passive_partlist, Controller}, State) ->
-	PartList = mnesia:dirty_all_keys(participant_mgmt),
-	Msg = management_message:info_passive_partlist(PartList),
-	Controller ! {forward, Msg},
-	{noreply, State};	
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

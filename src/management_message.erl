@@ -8,7 +8,10 @@
 -export([
 		accepted4service/1,
 		info_passive_partlist/1,
-		welcome2service/5]).
+		info_update_joining_participants/2,
+		tick/1,
+		welcome2service/5,
+		welcome2workcycle/4]).
 
 -define(WELCOME2SERVICE   , <<0:16>>).  % S->P
 -define(REGISTERATSERVICE , <<1:16>>).  % P->S
@@ -121,29 +124,57 @@ info_passive_partlist(PartList) when is_list(PartList) ->
 	InfoHead = << ?INFO_PASSIVEPARTICIPANTLIST:16>>,
 	InfoList = participantlist(PartList),
 	TotalSize = size(list_to_binary([InfoHead,InfoList])),
-	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]);
-info_passive_partlist(_) ->
-	<< >>.
+	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]).
+
+info_update_joining_participants(PartList, JoiningWhen) when is_list(PartList) ->
+	InfoHead = << ?INFO_UPDATEACTIVEJOINING:16>>,
+	InfoList = participant_update_list(PartList, JoiningWhen),
+	TotalSize = size(list_to_binary([InfoHead,InfoList])),
+	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]).
+
+tick(WorkCycleNumber) ->
+	TotalSize = size( << WorkCycleNumber:64 >> ),
+	list_to_binary([?TICK, <<TotalSize:16>>, <<WorkCycleNumber:64>>]).
+
+
+welcome2workcycle(AcceptReject, ForWorkCycleNumber, Timeout, ActivePartList) ->
+	APartList = participantlist(ActivePartList),
+	Msg = list_to_binary([<< AcceptReject:8, ForWorkCycleNumber:64, Timeout:16 >>, APartList]),
+	TotalSize = size(Msg),
+	list_to_binary([?WELCOME2WORKCYCLE, TotalSize, Msg]).
 
 %% Returns first two bytes of how many participants are in the list,
 %% followed by the five tupled participants.
 participantlist(PartList) ->
 	LengthList = length(PartList),
 	ListHead = << LengthList:16 >>,
-	ListMeat = lists:flatmap(fun(X) -> 
-					#participant{   participantid=Pid, 
-									userid=Uid, 
-									sig=Sig, 
-									diffiehellman=DH, 
-									diffiehellmansig=DHSig} = X,
-					PidSize = size(Pid), UidSize = size(Uid),
-					SigSize = size(Sig), DHSize = size(DH),
-					DHSigSize = size(DHSig),
-					[<< PidSize:16, Pid:PidSize/binary, 
-						UidSize:16, Uid:UidSize/binary,
-						SigSize:16, Sig:SigSize/binary,
-						DHSize:16, DH:DHSize/binary,
-						DHSigSize:16, DHSig:DHSigSize/binary>>]
-					end, PartList),
+	ListMeat = lists:map(fun participant_to_binary/1, PartList),
 	list_to_binary([ListHead, ListMeat]).
+
+participant_update_list(PartList, JoiningWhen) ->
+	LengthList = length(PartList),
+	ListHead = << LengthList:16 >>,
+	ListMeat = lists:map(fun(X) -> 
+							PartBin = participant_to_binary(X), 
+							list_to_binary([<< JoiningWhen:64 >>, PartBin]) 
+						   end, PartList),
+	list_to_binary([ListHead, ListMeat]).
+
+participant_to_binary(Participant) when is_record(Participant, participant) ->
+	#participant{participantid=Pid, 
+		userid=Uid, 
+		sig=Sig, 
+		diffiehellman=DH, 
+		diffiehellmansig=DHSig} = Participant,
+	PidSize = size(Pid), UidSize = size(Uid),
+	SigSize = size(Sig), DHSize = size(DH),
+	DHSigSize = size(DHSig),
+	[<< PidSize:16, Pid:PidSize/binary, 
+		UidSize:16, Uid:UidSize/binary,
+		SigSize:16, Sig:SigSize/binary,
+		DHSize:16, DH:DHSize/binary,
+		DHSigSize:16, DHSig:DHSigSize/binary>>];
+participant_to_binary(_) ->
+	io:format("wrong argument"),
+	[<<>>].
 

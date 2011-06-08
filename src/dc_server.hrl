@@ -1,6 +1,7 @@
 %% General config options
 -define(PROTOCOL_VERSION, 1).
 -define(SYMBOL_LENGTH, 30).
+-define(MIN_ACTIVE_PARTICIPANTS, 2).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Different Features of a server

@@ -38,6 +38,8 @@ listen(Sock, Part) ->
 			case management_message:parse_message(<<MsgType:16>>, MsgBin) of
 				{irq, Irq} -> 
 					handle_irq(Irq);
+				{joinworkcycle} -> 
+					round_manager:join_workcycle(Part, self());
 				{error, Reason} -> 
 					io:format("Parseerror happended during message parsing: ~w!~n",[Reason])
 			end,

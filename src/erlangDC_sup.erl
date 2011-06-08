@@ -26,5 +26,6 @@ start_link() ->
 init([]) ->
  	Server             = ?CHILD(dc_server, worker),
  	ParticipantManager = ?CHILD(participant_manager, worker),
-    {ok, { {one_for_all, 4, 10}, [Server, ParticipantManager]} }.
+	RoundManagerSup    = ?CHILD(round_manager_sup, supervisor), 
+    {ok, { {one_for_all, 4, 10}, [Server, ParticipantManager, RoundManagerSup]} }.
 
