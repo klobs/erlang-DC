@@ -1,7 +1,9 @@
 %% General config options
--define(PROTOCOL_VERSION, 1).
--define(SYMBOL_LENGTH, 30).
--define(MIN_ACTIVE_PARTICIPANTS, 2).
+-define(PROTOCOL_VERSION        , 1).
+-define(SYMBOL_LENGTH           , 30).
+-define(MIN_ACTIVE_PARTICIPANTS , 2).
+-define(DEFAULTTICKTIMEOUT      , 1000).
+-define(DEFAULTRTTIMEOUT        , infinity).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Different Features of a server

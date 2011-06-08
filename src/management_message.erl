@@ -77,8 +77,10 @@ parse_message(TypeBin, _MsgBin) when TypeBin == ?JOINWORKCYCLE ->
 	{joinworkcycle};
 
 %% ADD
+parse_message(TypeBin, <<WCN:64, RN:16, AddMsg/binary>>) when TypeBin == ?ADD ->
+	{add, WCN, RN, AddMsg};
 parse_message(TypeBin, _MsgBin) when TypeBin == ?ADD ->
-	{error, unimplemented_add};
+	{error, malformed_add};
 
 %% ADD RESERVATION
 parse_message(TypeBin, _MsgBin) when TypeBin == ?ADDRESERVATION ->
@@ -103,14 +105,6 @@ parse_message(_, _) ->
 %% Messages from perver -> participant
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%% Welcome 2 Service
-welcome2service(Version, SymbolLength, ParticipantCount, AcceptReject, FeatureList) ->
-    FeatureBin = << <<X:16, Y:16>> || {X, Y} <- FeatureList >>,
-	MsgTail = list_to_binary([<< Version:16, SymbolLength:16, ParticipantCount:16, AcceptReject:16 >>, FeatureBin]),
-	TailSize = byte_size(MsgTail),
-	list_to_binary([?WELCOME2SERVICE, << TailSize:16>>,  MsgTail]).
-
-%% Accepted 4 Service
 accepted4service(true) ->
 	Accepted = <<0:8>>,	
 	AccceptedSize = byte_size(Accepted),
@@ -136,12 +130,17 @@ tick(WorkCycleNumber) ->
 	TotalSize = size( << WorkCycleNumber:64 >> ),
 	list_to_binary([?TICK, <<TotalSize:16>>, <<WorkCycleNumber:64>>]).
 
+welcome2service(Version, SymbolLength, ParticipantCount, AcceptReject, FeatureList) ->
+    FeatureBin = << <<X:16, Y:16>> || {X, Y} <- FeatureList >>,
+	MsgTail = list_to_binary([<< Version:16, SymbolLength:16, ParticipantCount:16, AcceptReject:16 >>, FeatureBin]),
+	TailSize = byte_size(MsgTail),
+	list_to_binary([?WELCOME2SERVICE, <<TailSize:16>>,  MsgTail]).
 
 welcome2workcycle(AcceptReject, ForWorkCycleNumber, Timeout, ActivePartList) ->
 	APartList = participantlist(ActivePartList),
 	Msg = list_to_binary([<< AcceptReject:8, ForWorkCycleNumber:64, Timeout:16 >>, APartList]),
 	TotalSize = size(Msg),
-	list_to_binary([?WELCOME2WORKCYCLE, TotalSize, Msg]).
+	list_to_binary([?WELCOME2WORKCYCLE, <<TotalSize:16>>, Msg]).
 
 %% Returns first two bytes of how many participants are in the list,
 %% followed by the five tupled participants.
@@ -155,8 +154,8 @@ participant_update_list(PartList, JoiningWhen) ->
 	LengthList = length(PartList),
 	ListHead = << LengthList:16 >>,
 	ListMeat = lists:map(fun(X) -> 
-							PartBin = participant_to_binary(X), 
-							list_to_binary([<< JoiningWhen:64 >>, PartBin]) 
+							[PartBin] = participant_to_binary(X), 
+							[list_to_binary([<< JoiningWhen:64 >>, PartBin])]
 						   end, PartList),
 	list_to_binary([ListHead, ListMeat]).
 
