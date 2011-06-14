@@ -10,7 +10,7 @@ rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, B}}) ->
 		{add, {part, P}, {wcn, W}, {rn, R}, {addmsg, A}} ->
 			io:format("rt_message_handler: not yet in receive_rt mode, buffering message: ~w~n",[A]),
 				rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, 
-						{bufferlist, B ++ [{add, {part, P}, {wcn, W}, {rn, R}, {addmsg, A}}]}});
+						{bufferlist, B ++ [{add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}]}});
 		Error ->
 			io:format("This message is not for me [waiting]: ~w ~n",[Error]),
 			rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, B}})
