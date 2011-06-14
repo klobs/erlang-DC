@@ -240,10 +240,11 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 					generic_send_to_connections(NConfConsL, 
 						{ 
 						wait_for_realtime_msg, {wcn, W}, 
-						{rn, R}, {timeout, State#state.rtmsgtimeout}}),
+						{rn, 0}, {timeout, State#state.rtmsgtimeout}}),
 					NextMsgLengthBits = NextMsgLengthBytes * 8,	
 					NewState = State#state{
 						add_up_msg                 = <<0:NextMsgLengthBits>>,
+						current_round_number       = 0,
 						participants_expected      = NConfPartConsL,
 						participants_confirmed     = [],
 						individual_message_lengths = RestMessages},
@@ -313,7 +314,11 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 											participants_confirmed = [],
 											participants_expected = NConfPartConsL
 										},
-					{next_state, sening, NState}
+					generic_send_to_connections(NConfConsL, 
+						{ 
+						wait_for_realtime_msg, {wcn, W}, 
+						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
+					{next_state, sending, NState}
 			end;
 		false ->
 			NState = State#state{   add_up_msg = NLocalSum,
