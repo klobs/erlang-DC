@@ -241,7 +241,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{ 
 						wait_for_realtime_msg, {wcn, W}, 
 						{rn, R}, {timeout, State#state.rtmsgtimeout}}),
-						NextMsgLengthBits = NextMsgLengthBytes * 8,	
+					NextMsgLengthBits = NextMsgLengthBytes * 8,	
 					NewState = State#state{
 						add_up_msg                 = <<0:NextMsgLengthBits>>,
 						participants_expected      = NConfPartConsL,
@@ -277,7 +277,7 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 				(size(AddMsg) == size(State#state.add_up_msg)) and
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
-	io:format("[sending]: Add message arrived for ~w ~w~n",[C,AddMsg]),
+	io:format("[sending]: Add message arrived for ~w ~n",[C]),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, AddMsg),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
