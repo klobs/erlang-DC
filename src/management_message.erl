@@ -1,4 +1,5 @@
 -module(management_message).
+-compile([debug_info]).
 -include("dc_server.hrl").
 
 %% For inbound messages
@@ -7,6 +8,7 @@
 %% For outbound messages
 -export([
 		accepted4service/1,
+		added/3,
 		info_passive_partlist/1,
 		info_update_joining_participants/2,
 		tick/1,
@@ -114,6 +116,11 @@ accepted4service(_) ->
 	RejectedSize = byte_size(Rejected),
 	list_to_binary([?ACCEPTED4SERVICE, <<RejectedSize:16>>, Rejected]).
 	
+added(WCN, RN, MsgBin) ->
+	Payload  = list_to_binary([<<WCN:64, RN:16>>, MsgBin]),
+	PayloadSize = size(Payload),
+	list_to_binary([?ADDED, <<PayloadSize:16>>,Payload]).
+
 info_passive_partlist(PartList) when is_list(PartList) ->
 	InfoHead = << ?INFO_PASSIVEPARTICIPANTLIST:16>>,
 	InfoList = participantlist(PartList),

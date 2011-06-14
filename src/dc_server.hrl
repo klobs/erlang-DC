@@ -1,7 +1,7 @@
 %% General config options
 -define(PROTOCOL_VERSION        , 1).
--define(SYMBOL_LENGTH           , 30).
--define(MIN_ACTIVE_PARTICIPANTS , 2).
+-define(SYMBOL_LENGTH           , 32).
+-define(MIN_ACTIVE_PARTICIPANTS , 1).
 -define(DEFAULTTICKTIMEOUT      , 1000).
 -define(DEFAULTRTTIMEOUT        , infinity).
 

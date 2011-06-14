@@ -97,7 +97,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({register, {Part, Controller}}, State) when is_record(Part, participant) ->
 	M = management_message:accepted4service(true),
-	Controller ! {forward, M},
+	Controller ! {forward_to_participant, {msg,M}},
 	%gen_tcp:send(Sock, M),
 	PMI = #participant_mgmt{ participant = Part, controller = Controller },
 	T = fun() ->
@@ -126,7 +126,7 @@ handle_cast({unregister, Part}, State) when is_record(Part, participant) ->
 handle_cast({send_passive_partlist, Controller}, State) ->
 	PartList = mnesia:dirty_all_keys(participant_mgmt),
 	Msg = management_message:info_passive_partlist(PartList),
-	Controller ! {forward, Msg},
+	Controller ! {forward_to_participant, {msg, Msg}},
 	{noreply, State};	
 
 handle_cast(_Msg, State) ->

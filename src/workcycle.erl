@@ -1,18 +1,11 @@
-%%%-------------------------------------------------------------------
-%%% File    : eb_atm.erl
-%%% Author  : Mitchell Hashimoto <mitchell.hashimoto@gmail.com>
-%%% Description : The ATM backend for ErlyBank
-%%%
-%%% Created :  6 Sep 2008 by Mitchell Hashimoto <mitchell.hashimoto@gmail.com>
-%%%-------------------------------------------------------------------
 -module(workcycle).
+-compile([debug_info]).
 -include_lib("stdlib/include/qlc.hrl").
 -include("dc_server.hrl").
 -behaviour(gen_fsm).
 
 %% API
--export([add_message_handler/2,
-		join_workcycle/2,
+-export([ join_workcycle/2,
 		start_link/0]).
 
 %% gen_fsm callbacks
@@ -38,18 +31,23 @@
 -define(ACCEPTED, 0).
 -define(REJECTED, 1).
 
--define(RESERVATION_LENGTH, 12).
+-define(RESERVATION_LENGTH , 12).
+-define(MODULO             , 16#100000000).
 
--record(state,  {   current_workcycle    = 0,
-					participants_joining = [],
-					participants_leaving = [],
-					participants_active  = [],
-					ticktimeout          = ?DEFAULTTICKTIMEOUT,
-					rtmsgtimeout         = ?DEFAULTRTTIMEOUT}).
-
--record(specialStateReservation, {  normalState  = #state{},
-									add_up_msg = << 0:32, 0:32, 0:32, 0:32 >>,
-									round_number = 0}).
+-record(state,{     %Needed for every state   
+	   				current_workcycle                    = 0,
+					participants_joining                 = [],
+					participants_leaving                 = [],
+					rtmsgtimeout                         = ?DEFAULTRTTIMEOUT,
+					ticktimeout                          = ?DEFAULTTICKTIMEOUT,
+					%Needed for reservation and sinding:
+					add_up_msg                           = << 0:96 >>,
+					current_round_number                 = 0,
+					individual_message_lengths           = [],
+					participants_expected                = [],
+					participants_confirmed               = [],
+					rounds_expected                      = -1
+				}).
 
 %%====================================================================
 %% API
@@ -61,7 +59,8 @@
 %% does not return until Module:init/1 has returned.
 %%--------------------------------------------------------------------
 
-join_workcycle(Part, Controller) when is_record(Part, participant) and is_pid(Controller) ->
+join_workcycle(Part, Controller) when 
+						is_record(Part, participant) and is_pid(Controller) ->
 	gen_fsm:send_event(?MODULE, {joinworkcycle, {Part, Controller}});		
 
 join_workcycle(_, _) ->
@@ -100,13 +99,13 @@ init([]) ->
 %%--------------------------------------------------------------------
 
 waiting({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
-	PartJoining = State#state.participants_joining,
-	NewPartJoining = [PartController | PartJoining], 
+	NewPartJoining = [PartController | State#state.participants_joining], 
 	NewState = State#state{participants_joining = NewPartJoining},
 	CurrentWorkcycle = State#state.current_workcycle,
-	AList = get_active_participant_list(CurrentWorkcycle),
+	AList = generic_get_active_participant_list(CurrentWorkcycle),
 	case (length(AList) >= ?MIN_ACTIVE_PARTICIPANTS) of
 		true -> 
+			%% this can not be true and we have to restart
 			{next_state, waiting, #state{}};
 		false ->
 			case (length(NewPartJoining) + length(AList) >= ?MIN_ACTIVE_PARTICIPANTS) of
@@ -123,32 +122,33 @@ waiting(leavingParticipant, State) ->
 	{next_state, waiting, State};
 
 waiting(_Event, State) ->
-	io:format("This event should not happen in waiting state! Ingoring!~n"),
+	io:format("[waiting]: This event should not happen in waiting state! Ingoring!~n"),
 	{next_state, waiting, State}.
 
 
 startup(start, State) ->
-	{JPartList, JPartCons} = lists:unzip(State#state.participants_joining),
+	io:format("[startup]: entering startup state~n"),
+	{JPartL, JConsL} = lists:unzip(State#state.participants_joining),
 	CurrentWorkcycle = State#state.current_workcycle,
-	APartRecList = get_active_participant_list(CurrentWorkcycle),
-	{APartList, APartCons} = lists:unzip(APartRecList),
-	AllExpectedCons = JPartCons ++ APartCons,
-	AllExpectedRecs = APartRecList ++ State#state.participants_joining,
-	% TODO edit timeout.
-	W2WMsg = management_message:welcome2workcycle(?ACCEPTED, CurrentWorkcycle, 2000, APartList),
-	send_to_participants(JPartCons, W2WMsg),		
-	IUJMsg = management_message:info_update_joining_participants(JPartList, CurrentWorkcycle),
-	send_to_participants(AllExpectedCons, IUJMsg),
-	set_participants_active(JPartList, CurrentWorkcycle),
+	io:format("[startup]: current workcycle is ~w~n",[CurrentWorkcycle]),
+	APartConsL = generic_get_active_participant_list(CurrentWorkcycle),
+	{APartL, AConsL} = lists:unzip(APartConsL),
+	NExpdConsL = JConsL ++ AConsL,
+	NExpdPartConsL = APartConsL ++ State#state.participants_joining,
+	startup_send_w2wc(CurrentWorkcycle, APartL, JConsL),
+	startup_send_iujp(JPartL, CurrentWorkcycle, NExpdConsL),
+	startup_set_participants_active(JPartL, CurrentWorkcycle),
 	% TODO leaving connections
 	receive 
 		after ?DEFAULTTICKTIMEOUT ->
 			true
 	end,
-	TickMsg = management_message:tick(CurrentWorkcycle),	
-	lists:foreach(fun(X) -> spawn(?MODULE, add_message_handler, [State#state.rtmsgtimeout, X]) end, AllExpectedRecs),
-	send_to_participants(AllExpectedCons, TickMsg),
-	ReservationState = #specialStateReservation{normalState = State},
+	startup_send_tick(NExpdConsL, CurrentWorkcycle, State#state.rtmsgtimeout),
+	io:format("[startup]: entering reservation state~n"),
+	ReservationState = #state{
+		current_workcycle = State#state.current_workcycle,
+		participants_expected=NExpdPartConsL, 
+		participants_joining=[]},
 	{next_state, reservation, ReservationState};
 
 startup({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
@@ -161,26 +161,154 @@ startup(leavingParticipant, State) ->
 	{next_state, startup, State};
 
 startup(Event, State) ->
-	io:format("Unknown event for state startup. Ignoring ~w!~n",[Event]),
+	io:format("[startup]: Unknown event for state startup. Ignoring ~w!~n",[Event]),
 	{next_state, startup, State}.
 
 
-reservation({add, {_Part, Controller} = APart, 
-				WorkcycleNumber, Roundnumber, <<AddMsg:96>>}, State) ->
-	io:format("Add message arrived for ~w!~n",[Controller]),
+reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>}}, State) 
+		 		when 
+				(W == State#state.current_workcycle) and 
+				(R == State#state.current_round_number) ->
+	io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
+	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, <<AddMsg:96>>),
+	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
+	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
+	case length(NExpdPartConsL) == 0 of
+		true -> 
+			io:format("[reservation]: broadcast and new round~n"),
+			AddedMsg = management_message:added(State#state.current_workcycle, 
+											State#state.current_round_number, NLocalSum),
+			{_, NConfConsL} = lists:unzip(NConfPartConsL),
+			generic_send_to_participants(NConfConsL, AddedMsg),
+			io:format("[reservation]: Checking if reservation has finished?~n"),
+			case reservation_evaluate_reservation(State#state.rounds_expected, 
+							State#state.individual_message_lengths, AddedMsg) of
+				{not_finished} ->	%% Weitere Reservierungsrunde
+					io:format("[reservation]: Not finished, just continuing~n"),
+					NewState = State#state{
+						add_up_msg             = << 0:96 >>,
+						participants_expected  = NConfPartConsL,
+						participants_confirmed = [],
+						current_round_number   = State#state.current_round_number +1},
+					{next_state, reservation, NewState};
+				{not_finished, {ec,EC}} -> 
+					io:format("[reservation]: Not finished, but at least we know how many rounds we are probably going to take: ~w~n",[EC]),
+					NewState = State#state{
+						add_up_msg             = << 0:96 >>,
+						participants_expected  = NConfPartConsL,
+						participants_confirmed = [],
+						rounds_expected        = EC,
+						current_round_number   = State#state.current_round_number +1},
+					{next_state, reservation, NewState};
+				{not_finished, {iml, IML}} ->
+					io:format("[reservation]: Not finished, but there is at least one new message length collected.~n"),
+					NewState = State#state{
+						add_up_msg                 = << 0:96 >>,
+						participants_expected      = NConfPartConsL,
+						participants_confirmed     = [],
+						individual_message_lengths = IML,
+						current_round_number       = State#state.current_round_number +1},
+					{next_state, reservation, NewState};
+				{finished, {iml,[]}} -> %% Es gibt keine Teilnehmer -> neuer Workcycle
+					io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
+					NewState = #state{
+							current_workcycle     = W + 1,
+							rtmsgtimeout          = State#state.rtmsgtimeout,
+							ticktimeout           = State#state.ticktimeout,
+							participants_expected = NConfPartConsL,
+							participants_joining  = State#state.participants_joining,
+							participants_leaving  = State#state.participants_leaving
+						},
+					gen_fsm:send_event(?MODULE, start),
+					{next_state, startup, NewState};
+				{finished, {iml, [NextMsgLengthBytes|RestMessages]}} ->
+					io:format("Reservation finished -> next round~n"),
+					generic_send_to_connections(NConfConsL, 
+						{ 
+						wait_for_realtime_msg, {wcn, W}, 
+						{rn, R}, {timeout, State#state.rtmsgtimeout}}),
+						NextMsgLengthBits = NextMsgLengthBytes * 8,	
+					NewState = State#state{
+						add_up_msg                 = <<0:NextMsgLengthBits>>,
+						participants_expected      = NConfPartConsL,
+						participants_confirmed     = [],
+						individual_message_lengths = RestMessages},
+					{next_state, sending, NewState}
+			end;
+		_ ->
+			{next_state, reservation, State#state{add_up_msg = NLocalSum, 
+											participants_expected = NExpdPartConsL, 
+											participants_confirmed = NConfPartConsL}}
+	end;
+
+%% TODO Timeout
+%reservation({addtimeout, {part, P}, {con, C}, {wcn, W}, {rn, R}}, State) ->
+reservation({addtimeout, _, _, _, _}, State) ->
+	io:format("[reservation]: Todo implement handling for timeouts in reservation~n"),
 	{next_state, reservation, State};
 
 reservation({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
-	NormalState = State#specialStateReservation.normalState,
-	NewPartJoining = [PartController | NormalState#state.participants_joining],
-	NewNormalState = NormalState#state{participants_joining = NewPartJoining},
-	NewState = State#specialStateReservation{normalState = NewNormalState},
+	NewPartJoining = [PartController | State#state.participants_joining],
+	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, startup, NewState};
 
-reservation(_Event, State) ->
+reservation(Event, State) ->
+	io:format("[reservation]: dont know how to handle event ~w in state ~w~n",[Event, State]),
 	{next_state, reservation, State}.
 
-sending(_Event, State) ->
+sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
+		 		when 
+				is_binary(AddMsg) and
+				(size(AddMsg) == size(State#state.add_up_msg)) and
+				(W == State#state.current_workcycle) and 
+				(R == State#state.current_round_number) ->
+	io:format("[sending]: Add message arrived for ~w ~w~n",[C,AddMsg]),
+	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, AddMsg),
+	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
+	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
+	case length(NExpdPartConsL) == 0 of
+		true -> 
+			io:format("[sending]: broadcast and new round~n"),
+			AddedMsg = management_message:added(State#state.current_workcycle, 
+											State#state.current_round_number, NLocalSum),
+			io:format("[sending]: Unzipping lists~n"),
+			{_, NConfConsL} = lists:unzip(NConfPartConsL),
+			io:format("[sending]: distributing added message~n"),
+			generic_send_to_participants(NConfConsL, AddedMsg),
+			io:format("[sending]: Checking whether workcycle has finished..."),
+			case length(State#state.individual_message_lengths) of
+				0 ->
+					io:format("...yup: no more new messages, starting new workcycle"),
+					NState = #state{ current_workcycle    = W + 1,
+									rtmsgtimeout          = State#state.rtmsgtimeout,
+									ticktimeout           = State#state.ticktimeout,
+									participants_expected = NConfPartConsL,
+									participants_joining  = State#state.participants_joining,
+									participants_leaving  = State#state.participants_leaving
+										},
+					gen_fsm:send_event(?MODULE, start),
+					{next_state, startup, NState};
+				L ->
+					io:format("... nope: there are ~w further rounds expectd~n",[L]),
+					[NextMsgLengthBytes| RestMsgL] = State#state.individual_message_lengths,
+					NextMsgLengthBits = NextMsgLengthBytes *8,
+					NState = State#state{   individual_message_lengths = RestMsgL,
+											add_up_msg = <<0:NextMsgLengthBits>>,
+											current_round_number = R + 1,
+											participants_confirmed = [],
+											participants_expected = NConfPartConsL
+										},
+					{next_state, sening, NState}
+			end;
+		false ->
+			NState = State#state{   add_up_msg = NLocalSum,
+									participants_confirmed = NConfPartConsL,
+									participants_expected = NExpdPartConsL},
+			{next_state, sending, NState}
+	end;
+
+sending(Event, State) ->
+	io:format("[sending]: don't know propper reaction for ~w in ~w state~n", [Event, State]),
 	{next_state, sending, State}.
 
 finish_workcycle(_Event, State) ->
@@ -289,31 +417,43 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-send_to_participants(PartConList, Msg) when is_list(PartConList) ->
-	lists:foreach( fun(X) -> X ! {forward, Msg} end, PartConList),
+generic_send_to_participants([], _Msg) ->
 	ok;
-send_to_participants(_PList, _Msg) ->
+generic_send_to_participants(PartConList, Msg) when is_list(PartConList) ->
+	io:format("[generic_send]: send arguemtns received: ~w ~w~n",[PartConList, Msg]),
+	lists:foreach( fun(X) -> 
+				%io:format("forwarding ~w to ~w~n",[Msg, X]),
+				X ! {forward_to_participant, {msg, Msg}} end, PartConList),
+	ok;
+generic_send_to_participants(_PList, _Msg) ->
 	ok.
 
-add_message_handler(Timeout, {Part, Controller}) when is_record(Part, participant) ->
-	Controller ! {add_message_handler, self()},
-	link(Controller),
-	receive 
-		{add, {Part, Controller}, WorkcycleNumber, RoundNumber, Msg} ->
-			gen_fsm:send_event(?MODULE, {add, {Part, Controller}, WorkcycleNumber, RoundNumber, Msg}),
-			add_message_handler(Timeout, {Part, Controller})
-		after Timeout ->
-			gen_fsm:send_event(?MODULE, {addtimeout, {Part, Controller}}),
-			add_message_handler(Timeout, {Part, Controller})
-	end;
-add_message_handler(Error1, Error2) ->
-	io:format("this is not the added handler ~w ~w ~n",[Error1, Error2]),
-	badarg.
+generic_send_to_connections([], _Msg) ->
+	ok;
+generic_send_to_connections(ConsL, Msg) when is_list(ConsL) ->
+	lists:foreach( fun(X) -> 
+				X ! Msg end, ConsL),
+	ok;
+generic_send_to_connections(_PList, _Msg) ->
+	ok.
 
-get_active_participant_list(CurrentWorkcycle) ->
+generic_add_up_dcmsg(A,B) ->
+	generic_add_up_dcmsg(A, B, []).
+
+generic_add_up_dcmsg(<<AH:32, AT/binary>>, <<BH:32, BT/binary>>, CList)->
+	Remainder= (AH + BH) rem ?MODULO,
+	generic_add_up_dcmsg(AT, BT, [<<Remainder:32>> | CList]);
+generic_add_up_dcmsg(<<>>, <<>>, CList) ->
+	RList = lists:reverse(CList),
+	list_to_binary(RList).
+
+
+
+generic_get_active_participant_list(CurrentWorkcycle) ->
 	AT = fun() ->
 			qlc:e(
-			  qlc:q([ 1 || X <- mnesia:table(participant_mgmt), 
+				qlc:q([ {X#participant_mgmt.participant, X#participant_mgmt.controller} || 
+									X <- mnesia:table(participant_mgmt), 
 									X#participant_mgmt.active_from =< CurrentWorkcycle,
 									X#participant_mgmt.active_from >= 0
 									]))
@@ -321,7 +461,35 @@ get_active_participant_list(CurrentWorkcycle) ->
 	{atomic, AList} = mnesia:transaction(AT),
 	AList.
 
-set_participants_active(PartList, ForWhichWorkcycle) ->
+startup_send_iujp(_JP, _CurrentWorkcycle, []) -> ok;
+startup_send_iujp([], _CurrentWorkcycle, _ExptConsL) -> ok;
+startup_send_iujp(JPartL, CurrentWorkcycle, ExptConsL) ->
+	IUJMsg = management_message:info_update_joining_participants(JPartL, CurrentWorkcycle),
+	generic_send_to_participants(ExptConsL, IUJMsg),
+	ok.
+
+% TODO edit timeout.
+startup_send_w2wc(_C, _A, []) -> ok;
+startup_send_w2wc(CurrentWorkcycle, APartL, JConsL) ->
+	W2WMsg = management_message:welcome2workcycle(?ACCEPTED, 
+										CurrentWorkcycle, 2000, APartL),
+	generic_send_to_participants(JConsL, W2WMsg),
+	ok.
+
+startup_send_tick([], _CurrentWorkcycle, _Timeout) -> ok;
+startup_send_tick(ExpdConsL, CurrentWorkcycle, Timeout) ->
+	TickMsg = management_message:tick(CurrentWorkcycle),	
+	generic_send_to_connections(ExpdConsL, 
+		{ 
+		wait_for_realtime_msg, {wcn, CurrentWorkcycle}, 
+		{rn, 0}, {timeout, Timeout}
+	}),
+	generic_send_to_participants(ExpdConsL, TickMsg),
+	ok.
+
+startup_set_participants_active([], _) ->
+	ok;
+startup_set_participants_active(PartList, ForWhichWorkcycle) ->
 	SAT = fun() ->
 				PartRecs = lists:flatmap(fun(X) -> 
 									 	mnesia:read({participant_mgmt, X})
@@ -334,6 +502,31 @@ set_participants_active(PartList, ForWhichWorkcycle) ->
 	case mnesia:transaction(SAT) of
 		{atomic, ok} -> ok;
 		Error -> 
-			io:format("There was something wrong with setting the participant active ~w~n",[Error]),
+			io:format("[startup_set_participants_active]: There was something wrong with setting the participant active ~w~n",[Error]),
 			false
 	end.
+
+reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
+			<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
+	io:format("-1, _, 1, ~w, _~n",[IndividualMessageLength]),
+	{finished, {iml, [IndividualMessageLength]}};
+reservation_evaluate_reservation(-1, _Confirmed ,
+					<<_:112, 0:32, _IndividualLength:32, _Random:32>>) ->
+	io:format("-1, _, 0, _, _~n"),
+	{finished, {iml,[]}};
+reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, 
+								<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) 
+	when length(IndividualMessageLengths) == (ExpectedRounds - 1) ->
+	io:format("~w, ~w, 1, ~w, _~n",[ExpectedRounds, IndividualMessageLengths,IndividualMessageLength]),
+	{finished, {iml,lists:reverse([IndividualMessageLength|IndividualMessageLengths])}};
+reservation_evaluate_reservation(_ExpectedRounds, IndividualMessageLengths, 
+								<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
+	io:format("_, ~w, 1, ~w, _~n",[IndividualMessageLengths,IndividualMessageLength]),
+	{not_finished, {iml,[IndividualMessageLength|IndividualMessageLengths]}};
+reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
+						<<_:112, ParticipantCount:32, _IndividualLength:32, _Random:32>>) ->
+	io:format("-1, _, ~w, _, _~n",[ParticipantCount]),
+	{not_finished, {ec,ParticipantCount}};
+reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, AddMsg) ->
+	io:format("Expr ~w, Indiv ~w, Addm ~w~n", [ExpectedRounds, IndividualMessageLengths, AddMsg]),
+	{not_finished}.
