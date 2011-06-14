@@ -99,6 +99,7 @@ init([]) ->
 %%--------------------------------------------------------------------
 
 waiting({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
+	io:format("[waiting]: new participant joining our workcycles~n"),
 	NewPartJoining = [PartController | State#state.participants_joining], 
 	NewState = State#state{participants_joining = NewPartJoining},
 	CurrentWorkcycle = State#state.current_workcycle,
@@ -152,6 +153,7 @@ startup(start, State) ->
 	{next_state, reservation, ReservationState};
 
 startup({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
+	io:format("[startup]: New participant joining our workcycles"),
 	NewPartJoining = [PartController | State#state.participants_joining],
 	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, startup, NewState};
@@ -248,6 +250,7 @@ reservation({addtimeout, _, _, _, _}, State) ->
 	{next_state, reservation, State};
 
 reservation({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
+	io:format("[reservation]: new participant joining our workcycles~n"),
 	NewPartJoining = [PartController | State#state.participants_joining],
 	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, startup, NewState};
