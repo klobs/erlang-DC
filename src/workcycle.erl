@@ -253,7 +253,7 @@ reservation({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 	io:format("[reservation]: new participant joining our workcycles~n"),
 	NewPartJoining = [PartController | State#state.participants_joining],
 	NewState = State#state{participants_joining = NewPartJoining},
-	{next_state, startup, NewState};
+	{next_state, reservation, NewState};
 
 reservation(Event, State) ->
 	io:format("[reservation]: dont know how to handle event ~w in state ~w~n",[Event, State]),
@@ -310,9 +310,16 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 			{next_state, sending, NState}
 	end;
 
+sending({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
+	io:format("[sending]: new participant joining our workcycles~n"),
+	NewPartJoining = [PartController | State#state.participants_joining],
+	NewState = State#state{participants_joining = NewPartJoining},
+	{next_state, sending, NewState};
+
 sending(Event, State) ->
 	io:format("[sending]: don't know propper reaction for ~w in ~w state~n", [Event, State]),
 	{next_state, sending, State}.
+
 
 finish_workcycle(_Event, State) ->
 	{next_state, finish_workcycle, State}.
