@@ -192,6 +192,10 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						participants_expected  = NConfPartConsL,
 						participants_confirmed = [],
 						current_round_number   = State#state.current_round_number +1},
+					generic_send_to_connections(NConfConsL, 
+						{ 
+						wait_for_realtime_msg, {wcn, W}, 
+						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{not_finished, {ec,EC}} -> 
 					io:format("[reservation]: Not finished, but at least we know how many rounds we are probably going to take: ~w~n",[EC]),
@@ -201,6 +205,10 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						participants_confirmed = [],
 						rounds_expected        = EC,
 						current_round_number   = State#state.current_round_number +1},
+					generic_send_to_connections(NConfConsL, 
+						{ 
+						wait_for_realtime_msg, {wcn, W}, 
+						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{not_finished, {iml, IML}} ->
 					io:format("[reservation]: Not finished, but there is at least one new message length collected.~n"),
@@ -210,6 +218,10 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						participants_confirmed     = [],
 						individual_message_lengths = IML,
 						current_round_number       = State#state.current_round_number +1},
+					generic_send_to_connections(NConfConsL, 
+						{ 
+						wait_for_realtime_msg, {wcn, W}, 
+						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{finished, {iml,[]}} -> %% Es gibt keine Teilnehmer -> neuer Workcycle
 					io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
