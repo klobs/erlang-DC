@@ -5,8 +5,14 @@
 -behaviour(gen_fsm).
 
 %% API
--export([ join_workcycle/2,
-		start_link/0]).
+-export([join_workcycle/2,
+		get_passive_participant_list/0,
+		register_participant/2,
+		passive_participant_count/0,
+		send_active_partlist/1,
+		send_passive_partlist/1,
+		start_link/0,
+		unregister_participant/1]).
 
 %% gen_fsm callbacks
 -export([init/1, 
@@ -59,6 +65,24 @@
 %% does not return until Module:init/1 has returned.
 %%--------------------------------------------------------------------
 
+get_passive_participant_list() ->
+	gen_fsm:send_all_state_event(?MODULE, get_passive_participant_list).
+
+passive_participant_count() ->
+	gen_fsm:sync_send_all_state_event(?MODULE, count_passive_participants).
+
+register_participant(Part, Controller) ->
+	gen_fsm:send_all_state_event(?MODULE, {register, {Part, Controller}}).
+
+send_active_partlist(Controller) ->
+	gen_fsm:send_all_state_event(?MODULE, {send_active_partlist, Controller}).
+
+send_passive_partlist(Controller) ->
+	gen_fsm:send_all_state_event(?MODULE, {send_passive_partlist, Controller}).
+
+unregister_participant(Part) ->
+	gen_fsm:send_all_state_event(?MODULE, {unregister, Part}).
+
 join_workcycle(Part, Controller) when 
 						is_record(Part, participant) and is_pid(Controller) ->
 	gen_fsm:send_event(?MODULE, {joinworkcycle, {Part, Controller}});		
@@ -83,6 +107,9 @@ start_link() ->
 %% initialize.
 %%--------------------------------------------------------------------
 init([]) ->
+	mnesia:create_table(participant_mgmt, 
+		[{attributes, record_info(fields,participant_mgmt)}]),
+	mnesia:add_table_index(participant_mgmt, active_from),
 	{ok, waiting, #state{}}.
 
 %%--------------------------------------------------------------------
@@ -387,6 +414,42 @@ finish_workcycle(_Event, _From, State) ->
 %% gen_fsm:send_all_state_event/2, this function is called to handle
 %% the event.
 %%--------------------------------------------------------------------
+
+handle_event({register, {Part, Controller}}, StateName, State) when is_record(Part, participant) ->
+	M = management_message:accepted4service(true),
+	Controller ! {forward_to_participant, {msg,M}},
+	%gen_tcp:send(Sock, M),
+	PMI = #participant_mgmt{ participant = Part, controller = Controller },
+	T = fun() ->
+		mnesia:write(PMI),
+		ok
+		end,
+	case mnesia:transaction(T) of
+		{atomic, ok} -> 
+			{next_state, StateName, State};
+		_ -> 
+			io:format("Problems while registering new participants~n"),
+			{next_state, StateName, State}
+	end;
+
+handle_event({unregister, Part}, StateName, State) when is_record(Part, participant) ->
+	T = fun() ->
+			mnesia:delete({participant_mgmt, Part})
+		end,
+	case mnesia:transaction(T) of
+		{atomic, ok} ->
+			io:format("Unregistered a participant~n");
+		Error ->
+			io:format("~p~n",[Error])
+	end,
+	{next_state, StateName, State};
+
+handle_event({send_passive_partlist, Controller}, StateName, State) ->
+	PartList = mnesia:dirty_all_keys(participant_mgmt),
+	Msg = management_message:info_passive_partlist(PartList),
+	Controller ! {forward_to_participant, {msg, Msg}},
+	{next_state, StateName, State};	
+
 handle_event(_Event, StateName, State) ->
   {next_state, StateName, State}.
 
@@ -405,6 +468,11 @@ handle_event(_Event, StateName, State) ->
 %% gen_fsm:sync_send_all_state_event/2,3, this function is called to handle
 %% the event.
 %%--------------------------------------------------------------------
+
+handle_sync_event(count_passive_participants, _From, StateName, State) ->
+	Reply = mnesia:table_info(participant_mgmt, size),
+	{reply, Reply, StateName, State};
+
 handle_sync_event(_Event, _From, StateName, State) ->
   Reply = ok,
   {reply, Reply, StateName, State}.

@@ -3,7 +3,7 @@
 -export([welcome/1]).
 
 welcome(Sock) ->
-	NumPart = participant_manager:passive_participant_count(),
+	NumPart = workcycle:passive_participant_count(),
 	W2M = management_message:welcome2service(?PROTOCOL_VERSION, ?SYMBOL_LENGTH,NumPart, 0, ?FEATURE_LIST),
 	case gen_tcp:send(Sock, W2M) of
 		ok -> 
@@ -15,7 +15,7 @@ welcome(Sock) ->
 								case gen_tcp:recv(Sock, Length, 100) of
 									{ok, MsgBin} -> 
 										{register_at_service, Part} = management_message:parse_message(MsgTypeBin, MsgBin),
-										participant_manager:register_participant(Part, self()),
+										workcycle:register_participant(Part, self()),
 										AMHPid = spawn_link(rt_message_handler, rt_message_handler, [{wait, 
 													{part, Part}, {con, self()}, {wcn, -1},{bufferlist,[]}}]),
 										listen(Sock, Part, AMHPid, <<>>),
@@ -37,7 +37,7 @@ listen(Sock, Part, RTMsgHndlr, IncompleteMessage) ->
 	receive
 		{tcp_closed,Sock} ->
 			io:format("Socket closed, unregistering participant~n"),
-			participant_manager:unregister_participant(Part),
+			workcycle:unregister_participant(Part),
 			ok;
 		{tcp, Sock, Data} ->
 			IncompleteMessage = construct_and_parse_messages(Sock, Part, RTMsgHndlr, IncompleteMessage, Data),
@@ -78,8 +78,8 @@ construct_and_parse_messages(Sock, Part, RTMsgHndlr, OldDataBin, <<Incomplete/bi
 	construct_and_parse_messages(Sock, Part, RTMsgHndlr, NewData, <<>>).
 
 handle_irq(passivelist) ->
-	participant_manager:send_passive_partlist(self());
+	workcycle:send_passive_partlist(self());
 handle_irq(activelist) ->
-	participant_manager:send_active_partlist(self());
+	workcycle:send_active_partlist(self());
 handle_irq(_) ->
 	ok.
