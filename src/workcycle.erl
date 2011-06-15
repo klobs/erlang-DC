@@ -165,12 +165,15 @@ startup(start, State) ->
 	startup_send_iujp(JPartL, CurrentWorkcycle, NExpdConsL),
 	startup_set_participants_active(JPartL, CurrentWorkcycle),
 	% TODO leaving connections
-	receive 
-		after ?DEFAULTTICKTIMEOUT ->
-			true
+	F = fun() ->
+			receive 
+				after State#state.ticktimeout ->
+					true
+			end,
+			startup_send_tick(NExpdConsL, CurrentWorkcycle, State#state.rtmsgtimeout)
 	end,
-	startup_send_tick(NExpdConsL, CurrentWorkcycle, State#state.rtmsgtimeout),
-	io:format("[startup]: entering reservation state~n"),
+	spawn(F),
+	%io:format("[startup]: entering reservation state~n"),
 	ReservationState = #state{
 		current_workcycle = State#state.current_workcycle,
 		participants_expected=NExpdPartConsL, 
@@ -561,13 +564,13 @@ startup_send_w2wc(CurrentWorkcycle, APartL, JConsL) ->
 	generic_send_to_participants(JConsL, W2WMsg),
 	ok.
 
-startup_send_tick([], _CurrentWorkcycle, _Timeout) -> ok;
-startup_send_tick(ExpdConsL, CurrentWorkcycle, Timeout) ->
+startup_send_tick([], _CurrentWorkcycle, _RTtimeout) -> ok;
+startup_send_tick(ExpdConsL, CurrentWorkcycle, RTtimeout) ->
 	TickMsg = management_message:tick(CurrentWorkcycle),	
 	generic_send_to_connections(ExpdConsL, 
 		{ 
 		wait_for_realtime_msg, {wcn, CurrentWorkcycle}, 
-		{rn, 0}, {timeout, Timeout}
+		{rn, 0}, {timeout, RTtimeout}
 	}),
 	generic_send_to_participants(ExpdConsL, TickMsg),
 	ok.
