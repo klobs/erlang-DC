@@ -155,10 +155,10 @@ waiting(_Event, State) ->
 
 
 startup(start, State) ->
-	io:format("[startup]: entering startup state~n"),
+	%io:format("[startup]: entering startup state~n"),
 	{JPartL, JConsL} = lists:unzip(State#state.participants_joining),
 	CurrentWorkcycle = State#state.current_workcycle,
-	io:format("[startup]: current workcycle is ~w~n",[CurrentWorkcycle]),
+	%io:format("[startup]: current workcycle is ~w~n",[CurrentWorkcycle]),
 	APartConsL = generic_get_active_participant_list(CurrentWorkcycle),
 	{APartL, AConsL} = lists:unzip(APartConsL),
 	NExpdConsL = JConsL ++ AConsL,
@@ -198,22 +198,22 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 		 		when 
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
-	io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
+	%io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, <<AddMsg:96>>),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
 	case length(NExpdPartConsL) == 0 of
 		true -> 
-			io:format("[reservation]: broadcast and new round~n"),
+			%io:format("[reservation]: broadcast and new round~n"),
 			AddedMsg = management_message:added(State#state.current_workcycle, 
 											State#state.current_round_number, NLocalSum),
 			{_, NConfConsL} = lists:unzip(NConfPartConsL),
 			generic_send_to_participants(NConfConsL, AddedMsg),
-			io:format("[reservation]: Checking if reservation has finished?~n"),
+			%io:format("[reservation]: Checking if reservation has finished?~n"),
 			case reservation_evaluate_reservation(State#state.rounds_expected, 
 							State#state.individual_message_lengths, AddedMsg) of
 				{not_finished} ->	%% Weitere Reservierungsrunde
-					io:format("[reservation]: Not finished, just continuing~n"),
+					%io:format("[reservation]: Not finished, just continuing~n"),
 					NewState = State#state{
 						add_up_msg             = << 0:96 >>,
 						participants_expected  = NConfPartConsL,
@@ -225,7 +225,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{not_finished, {ec,EC}} -> 
-					io:format("[reservation]: Not finished, but at least we know how many rounds we are probably going to take: ~w~n",[EC]),
+					%io:format("[reservation]: Not finished, but at least we know how many rounds we are probably going to take: ~w~n",[EC]),
 					NewState = State#state{
 						add_up_msg             = << 0:96 >>,
 						participants_expected  = NConfPartConsL,
@@ -238,7 +238,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{not_finished, {iml, IML}} ->
-					io:format("[reservation]: Not finished, but there is at least one new message length collected.~n"),
+					%io:format("[reservation]: Not finished, but there is at least one new message length collected.~n"),
 					NewState = State#state{
 						add_up_msg                 = << 0:96 >>,
 						participants_expected      = NConfPartConsL,
@@ -251,7 +251,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{finished, {iml,[]}} -> %% Es gibt keine Teilnehmer -> neuer Workcycle
-					io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
+					%io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
 					NewState = #state{
 							current_workcycle     = W + 1,
 							rtmsgtimeout          = State#state.rtmsgtimeout,
@@ -263,7 +263,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 					gen_fsm:send_event(?MODULE, start),
 					{next_state, startup, NewState};
 				{finished, {iml, [NextMsgLengthBytes|RestMessages]}} ->
-					io:format("Reservation finished -> next round~n"),
+					%io:format("Reservation finished -> next round~n"),
 					generic_send_to_connections(NConfConsL, 
 						{ 
 						wait_for_realtime_msg, {wcn, W}, 
@@ -305,23 +305,23 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 				(size(AddMsg) == size(State#state.add_up_msg)) and
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
-	io:format("[sending]: Add message arrived for ~w ~n",[C]),
+	%io:format("[sending]: Add message arrived for ~w ~n",[C]),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, AddMsg),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
 	case length(NExpdPartConsL) == 0 of
 		true -> 
-			io:format("[sending]: broadcast and new round~n"),
+			%io:format("[sending]: broadcast and new round~n"),
 			AddedMsg = management_message:added(State#state.current_workcycle, 
 											State#state.current_round_number, NLocalSum),
-			io:format("[sending]: Unzipping lists~n"),
+			%io:format("[sending]: Unzipping lists~n"),
 			{_, NConfConsL} = lists:unzip(NConfPartConsL),
-			io:format("[sending]: distributing added message~n"),
+			%io:format("[sending]: distributing added message~n"),
 			generic_send_to_participants(NConfConsL, AddedMsg),
-			io:format("[sending]: Checking whether workcycle has finished..."),
+			%io:format("[sending]: Checking whether workcycle has finished..."),
 			case length(State#state.individual_message_lengths) of
 				0 ->
-					io:format("...yup: no more new messages, starting new workcycle"),
+					%io:format("...yup: no more new messages, starting new workcycle"),
 					NState = #state{ current_workcycle    = W + 1,
 									rtmsgtimeout          = State#state.rtmsgtimeout,
 									ticktimeout           = State#state.ticktimeout,
@@ -331,8 +331,8 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 										},
 					gen_fsm:send_event(?MODULE, start),
 					{next_state, startup, NState};
-				L ->
-					io:format("... nope: there are ~w further rounds expectd~n",[L]),
+				_L ->
+					%io:format("... nope: there are ~w further rounds expectd~n",[L]),
 					[NextMsgLengthBytes| RestMsgL] = State#state.individual_message_lengths,
 					NextMsgLengthBits = NextMsgLengthBytes *8,
 					NState = State#state{   individual_message_lengths = RestMsgL,
@@ -515,7 +515,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 generic_send_to_participants([], _Msg) ->
 	ok;
 generic_send_to_participants(PartConList, Msg) when is_list(PartConList) ->
-	io:format("[generic_send]: send arguemtns received: ~w ~w~n",[PartConList, Msg]),
+	%io:format("[generic_send]: send arguemtns received: ~w ~w~n",[PartConList, Msg]),
 	lists:foreach( fun(X) -> 
 				%io:format("forwarding ~w to ~w~n",[Msg, X]),
 				X ! {forward_to_participant, {msg, Msg}} end, PartConList),
@@ -603,25 +603,25 @@ startup_set_participants_active(PartList, ForWhichWorkcycle) ->
 
 reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
 			<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
-	io:format("-1, _, 1, ~w, _~n",[IndividualMessageLength]),
+	%io:format("-1, _, 1, ~w, _~n",[IndividualMessageLength]),
 	{finished, {iml, [IndividualMessageLength]}};
 reservation_evaluate_reservation(-1, _Confirmed ,
 					<<_:112, 0:32, _IndividualLength:32, _Random:32>>) ->
-	io:format("-1, _, 0, _, _~n"),
+	%io:format("-1, _, 0, _, _~n"),
 	{finished, {iml,[]}};
 reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, 
 								<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) 
 	when length(IndividualMessageLengths) == (ExpectedRounds - 1) ->
-	io:format("~w, ~w, 1, ~w, _~n",[ExpectedRounds, IndividualMessageLengths,IndividualMessageLength]),
+	%io:format("~w, ~w, 1, ~w, _~n",[ExpectedRounds, IndividualMessageLengths,IndividualMessageLength]),
 	{finished, {iml,lists:reverse([IndividualMessageLength|IndividualMessageLengths])}};
 reservation_evaluate_reservation(_ExpectedRounds, IndividualMessageLengths, 
 								<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
-	io:format("_, ~w, 1, ~w, _~n",[IndividualMessageLengths,IndividualMessageLength]),
+	%io:format("_, ~w, 1, ~w, _~n",[IndividualMessageLengths,IndividualMessageLength]),
 	{not_finished, {iml,[IndividualMessageLength|IndividualMessageLengths]}};
 reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
 						<<_:112, ParticipantCount:32, _IndividualLength:32, _Random:32>>) ->
-	io:format("-1, _, ~w, _, _~n",[ParticipantCount]),
+	%io:format("-1, _, ~w, _, _~n",[ParticipantCount]),
 	{not_finished, {ec,ParticipantCount}};
 reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, AddMsg) ->
-	io:format("Expr ~w, Indiv ~w, Addm ~w~n", [ExpectedRounds, IndividualMessageLengths, AddMsg]),
+	io:format("[reservation_evaluator]: Error: Expr ~w, Indiv ~w, Addm ~w~n", [ExpectedRounds, IndividualMessageLengths, AddMsg]),
 	{not_finished}.

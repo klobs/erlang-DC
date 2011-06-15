@@ -19,7 +19,7 @@ rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, B}}) ->
 rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, W}, {rn, R}, {bufferlist, []}, {timeout, T}}) ->
 	receive 
 		{add, {part, P}, {wcn, W}, {rn, R}, {addmsg, A}} ->
-			io:format("Add message received for wcn ~w round ~w~n",[W,R]),
+			%io:format("Add message received for wcn ~w round ~w~n",[W,R]),
 			gen_fsm:send_event(workcycle, {add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}),
 			rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, []}});
 		Error ->
