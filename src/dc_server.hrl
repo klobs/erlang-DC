@@ -1,7 +1,7 @@
 %% General config options
 -define(PROTOCOL_VERSION        , 1).
 -define(SYMBOL_LENGTH           , 32).
--define(MIN_ACTIVE_PARTICIPANTS , 1).
+-define(MIN_ACTIVE_PARTICIPANTS , 2).
 -define(DEFAULTTICKTIMEOUT      , 1000).
 -define(DEFAULTRTTIMEOUT        , infinity).
 
@@ -37,10 +37,10 @@
 -define(EQR_RESTART_WC      , 2).
 
 -define(FEATURE_LIST, [
-						{?FEATURE_KEG, ?KEG_NULL}, 
+						{?FEATURE_KEG, ?KEG_POBAB_FAIL_STOP_WC}, 
 						{?FEATURE_LCH, ?LCH_NONE}, 
-						{?FEATURE_KEX, ?KEX_MANUALLY},
-						{?FEATURE_VPL, ?VPL_FIXED},
+						{?FEATURE_KEX, ?KEX_FULLY_AUTOMATIC},
+						{?FEATURE_VPL, ?VPL_VARIABLE},
 						{?FEATURE_EQR, ?EQR_MUST_NOT_HAPPEN}
 					]).
 %% Records
