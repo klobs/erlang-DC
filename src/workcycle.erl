@@ -24,8 +24,6 @@
 		reservation/3, 
 		sending/2, 
 		sending/3, 
-		finish_workcycle/2,
-		finish_workcycle/3,
 		handle_event/3,
         handle_sync_event/4, 
 		handle_info/3, 
@@ -364,10 +362,6 @@ sending(Event, State) ->
 	io:format("[sending]: don't know propper reaction for ~w in ~w state~n", [Event, State]),
 	{next_state, sending, State}.
 
-
-finish_workcycle(_Event, State) ->
-	{next_state, finish_workcycle, State}.
-
 %%--------------------------------------------------------------------
 %% Function:
 %% state_name(Event, From, State) -> {next_state, NextStateName, NextState} |
@@ -396,10 +390,6 @@ reservation(_Event, _From, State) ->
   {reply, Reply, reservation, State}.
 
 sending(_Event, _From, State) ->
-  Reply = ok,
-  {reply, Reply, reservation, State}.
-
-finish_workcycle(_Event, _From, State) ->
   Reply = ok,
   {reply, Reply, reservation, State}.
 
