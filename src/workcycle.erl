@@ -6,6 +6,7 @@
 
 %% API
 -export([join_workcycle/2,
+		leave_workcycle/3,
 		get_passive_participant_list/0,
 		register_participant/2,
 		passive_participant_count/0,
@@ -84,10 +85,14 @@ unregister_participant(Part) ->
 join_workcycle(Part, Controller) when 
 						is_record(Part, participant) and is_pid(Controller) ->
 	gen_fsm:send_event(?MODULE, {joinworkcycle, {Part, Controller}});		
-
 join_workcycle(_, _) ->
 	{error, badargs}.
 
+leave_workcycle(Part, Controller, WCN) when is_record(Part, participant), 
+							is_pid(Controller), is_integer(WCN)->
+	gen_fsm:send_all_state_event(?MODULE, {leaveworkcycle, {Part, Controller, WCN}});
+leave_workcycle(_, _, _) ->
+	{error, badargs}.
 
 start_link() ->
   gen_fsm:start_link({local, ?SERVER}, ?MODULE, [], []).
@@ -143,52 +148,51 @@ waiting({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 			end
 	end;
 
-waiting(leavingParticipant, State) ->
-	% TODO
-	{next_state, waiting, State};
-
-waiting(_Event, State) ->
-	io:format("[waiting]: This event should not happen in waiting state! Ingoring!~n"),
+waiting(Event, State) ->
+	io:format("[waiting]: event ~w is not for me~n", [Event]),
 	{next_state, waiting, State}.
 
 
 startup(start, State) ->
-	%io:format("[startup]: entering startup state~n"),
-	{JPartL, JConsL} = lists:unzip(State#state.participants_joining),
 	CurrentWorkcycle = State#state.current_workcycle,
-	%io:format("[startup]: current workcycle is ~w~n",[CurrentWorkcycle]),
+	LPartConsL = generic_get_leaving_participant_list(CurrentWorkcycle),
+	{LPartL, LConsL} = lists:unzip(LPartConsL),
+	{JPartL, JConsL} = lists:unzip(State#state.participants_joining),
 	APartConsL = generic_get_active_participant_list(CurrentWorkcycle),
 	{APartL, AConsL} = lists:unzip(APartConsL),
-	NExpdConsL = JConsL ++ AConsL,
-	NExpdPartConsL = APartConsL ++ State#state.participants_joining,
+	NExpdConsL = JConsL ++ AConsL -- LConsL,
+	NExpdPartConsL = State#state.participants_joining ++ APartConsL -- LPartConsL,
+	io:format("[startup]: WC ~w joining: ~w, this round leaving ~w, total participants ~w ~n", 
+													[CurrentWorkcycle, JConsL, LConsL, NExpdConsL]),
 	startup_send_w2wc(CurrentWorkcycle, APartL, JConsL),
+	startup_send_iulp(LPartL, CurrentWorkcycle, NExpdConsL ++ LConsL),
+	startup_set_participants_inactive(LPartL),
 	startup_send_iujp(JPartL, CurrentWorkcycle, NExpdConsL),
 	startup_set_participants_active(JPartL, CurrentWorkcycle),
-	% TODO leaving connections
-	F = fun() ->
-			receive 
-				after State#state.ticktimeout ->
-					true
+	case length(NExpdPartConsL) >= ?MIN_ACTIVE_PARTICIPANTS of
+		true ->
+			F = fun() ->
+					receive 
+						after State#state.ticktimeout ->
+							true
+					end,
+					startup_send_tick(NExpdConsL, CurrentWorkcycle, State#state.rtmsgtimeout)
 			end,
-			startup_send_tick(NExpdConsL, CurrentWorkcycle, State#state.rtmsgtimeout)
-	end,
-	spawn(F),
-	%io:format("[startup]: entering reservation state~n"),
-	ReservationState = #state{
-		current_workcycle = State#state.current_workcycle,
-		participants_expected=NExpdPartConsL, 
-		participants_joining=[]},
-	{next_state, reservation, ReservationState};
+			spawn(F),
+			ReservationState = #state{
+				current_workcycle = State#state.current_workcycle,
+				participants_expected=NExpdPartConsL, 
+				participants_joining=[]},
+			{next_state, reservation, ReservationState};
+		false ->
+			{next_state, waiting, #state{current_workcycle = CurrentWorkcycle +1}}
+	end;
 
 startup({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 	io:format("[startup]: New participant joining our workcycles"),
 	NewPartJoining = [PartController | State#state.participants_joining],
 	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, startup, NewState};
-
-startup(leavingParticipant, State) ->
-	% TODO
-	{next_state, startup, State};
 
 startup(Event, State) ->
 	io:format("[startup]: Unknown event for state startup. Ignoring ~w!~n",[Event]),
@@ -199,22 +203,22 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 		 		when 
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
-	%io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
+	io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, <<AddMsg:96>>),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
 	case length(NExpdPartConsL) == 0 of
 		true -> 
-			%io:format("[reservation]: broadcast and new round~n"),
+			io:format("[reservation]: broadcast and new round~n"),
 			AddedMsg = management_message:added(State#state.current_workcycle, 
 											State#state.current_round_number, NLocalSum),
 			{_, NConfConsL} = lists:unzip(NConfPartConsL),
 			generic_send_to_participants(NConfConsL, AddedMsg),
-			%io:format("[reservation]: Checking if reservation has finished?~n"),
+			io:format("[reservation]: Checking if reservation has finished?~n"),
 			case reservation_evaluate_reservation(State#state.rounds_expected, 
 							State#state.individual_message_lengths, AddedMsg) of
 				{not_finished} ->	%% Weitere Reservierungsrunde
-					%io:format("[reservation]: Not finished, just continuing~n"),
+					io:format("[reservation]: Not finished, just continuing~n"),
 					NewState = State#state{
 						add_up_msg             = << 0:96 >>,
 						participants_expected  = NConfPartConsL,
@@ -226,7 +230,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{not_finished, {ec,EC}} -> 
-					%io:format("[reservation]: Not finished, but at least we know how many rounds we are probably going to take: ~w~n",[EC]),
+					io:format("[reservation]: Not finished, but at least we know how many rounds we are probably going to take: ~w~n",[EC]),
 					NewState = State#state{
 						add_up_msg             = << 0:96 >>,
 						participants_expected  = NConfPartConsL,
@@ -239,7 +243,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{not_finished, {iml, IML}} ->
-					%io:format("[reservation]: Not finished, but there is at least one new message length collected.~n"),
+					io:format("[reservation]: Not finished, but there is at least one new message length collected.~n"),
 					NewState = State#state{
 						add_up_msg                 = << 0:96 >>,
 						participants_expected      = NConfPartConsL,
@@ -252,7 +256,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					{next_state, reservation, NewState};
 				{finished, {iml,[]}} -> %% Es gibt keine Teilnehmer -> neuer Workcycle
-					%io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
+					io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
 					NewState = #state{
 							current_workcycle     = W + 1,
 							rtmsgtimeout          = State#state.rtmsgtimeout,
@@ -264,7 +268,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 					gen_fsm:send_event(?MODULE, start),
 					{next_state, startup, NewState};
 				{finished, {iml, [NextMsgLengthBytes|RestMessages]}} ->
-					%io:format("Reservation finished -> next round~n"),
+					io:format("Reservation finished -> next round~n"),
 					generic_send_to_connections(NConfConsL, 
 						{ 
 						wait_for_realtime_msg, {wcn, W}, 
@@ -408,6 +412,28 @@ sending(_Event, _From, State) ->
 %% the event.
 %%--------------------------------------------------------------------
 
+handle_event({leaveworkcycle, {Part, _Controller, WCN}}, StateName, State) ->
+	CurrentWCN = State#state.current_workcycle,
+	F = fun() ->
+			E = mnesia:read(participant_mgmt, Part, write),
+			case E of
+				[] -> 
+					mnesia:abort(no_actual_participant);
+				[PMI] ->
+					case (PMI#participant_mgmt.active_from =< CurrentWCN) 
+						and (PMI#participant_mgmt.active_from >= 0)
+						and (PMI#participant_mgmt.active_until < 0)
+						and (WCN >= CurrentWCN + 1) of
+						true -> 
+							mnesia:write(PMI#participant_mgmt{active_until = WCN});
+						false -> 
+							mnesia:abort(no_active_participant)
+					end
+			end
+		end,
+	mnesia:transaction(F),
+	{next_state, StateName, State};
+
 handle_event({register, {Part, Controller}}, StateName, State) when is_record(Part, participant) ->
 	M = management_message:accepted4service(true),
 	Controller ! {forward_to_participant, {msg,M}},
@@ -426,16 +452,26 @@ handle_event({register, {Part, Controller}}, StateName, State) when is_record(Pa
 	end;
 
 handle_event({unregister, Part}, StateName, State) when is_record(Part, participant) ->
-	T = fun() ->
-			mnesia:delete({participant_mgmt, Part})
-		end,
-	case mnesia:transaction(T) of
-		{atomic, ok} ->
-			io:format("Unregistered a participant~n");
-		Error ->
-			io:format("~p~n",[Error])
-	end,
-	{next_state, StateName, State};
+	CWN = State#state.current_workcycle,
+	case generic_is_participant_active(Part, CWN) of
+		true -> 
+			io:format("Participant is active~n"),
+			APartConL = generic_get_active_participant_list(CWN),
+			{_APartL, AConL} = lists:unzip(APartConL),
+			io:format("Sending info early quit to ~w~n", [AConL]),
+			generic_send_info_early_quit_service(Part, CWN, State#state.current_round_number, AConL),
+			generic_unregister_passive_participant(Part),
+			NState = #state{current_workcycle = CWN +1,
+							participants_joining = State#state.participants_joining,
+							participants_leaving = State#state.participants_leaving
+							},
+			gen_fsm:send_event(?MODULE, start),
+			{next_state, startup, NState};
+		false -> 
+			io:format("Participant is not active~n"),
+			generic_unregister_passive_participant(Part),
+			{next_state, StateName, State}
+	end;
 
 handle_event({send_passive_partlist, Controller}, StateName, State) ->
 	PartList = mnesia:dirty_all_keys(participant_mgmt),
@@ -507,11 +543,11 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 generic_send_to_participants([], _Msg) ->
 	ok;
-generic_send_to_participants(PartConList, Msg) when is_list(PartConList) ->
+generic_send_to_participants(ConList, Msg) when is_list(ConList) ->
 	%io:format("[generic_send]: send arguemtns received: ~w ~w~n",[PartConList, Msg]),
 	lists:foreach( fun(X) -> 
 				%io:format("forwarding ~w to ~w~n",[Msg, X]),
-				X ! {forward_to_participant, {msg, Msg}} end, PartConList),
+				X ! {forward_to_participant, {msg, Msg}} end, ConList),
 	ok;
 generic_send_to_participants(_PList, _Msg) ->
 	ok.
@@ -535,8 +571,6 @@ generic_add_up_dcmsg(<<>>, <<>>, CList) ->
 	RList = lists:reverse(CList),
 	list_to_binary(RList).
 
-
-
 generic_get_active_participant_list(CurrentWorkcycle) ->
 	AT = fun() ->
 			qlc:e(
@@ -549,11 +583,61 @@ generic_get_active_participant_list(CurrentWorkcycle) ->
 	{atomic, AList} = mnesia:transaction(AT),
 	AList.
 
+generic_get_leaving_participant_list(CurrentWorkcycle) ->
+	AT = fun() ->
+			qlc:e(
+				qlc:q([ {X#participant_mgmt.participant, X#participant_mgmt.controller} || 
+									X <- mnesia:table(participant_mgmt), 
+									X#participant_mgmt.active_until == CurrentWorkcycle
+									]))
+		end,
+	{atomic, LList} = mnesia:transaction(AT),
+	LList.
+
+generic_is_participant_active(Participant, CurrentWorkcycle) ->
+	AT = fun() ->
+			mnesia:read(participant_mgmt, Participant, read)
+		end,
+	case mnesia:transaction(AT) of 
+		{atomic, []} ->
+			false;
+		{atomic, [PMI]} ->
+			case (PMI#participant_mgmt.active_from =< CurrentWorkcycle) and
+				(PMI#participant_mgmt.active_from >= 0) of
+				true -> true;
+				false -> false
+			end;
+		_F	-> false
+	end.
+
+generic_send_info_early_quit_service(LeavingPart, Workcycle, RoundNumber, ExpectedConsL) ->
+	IEQS = management_message:info_early_quit_service([LeavingPart], Workcycle, RoundNumber),
+	generic_send_to_participants(ExpectedConsL, IEQS),
+	ok.
+
+generic_unregister_passive_participant(Part) ->
+	T = fun() ->
+			mnesia:delete({participant_mgmt, Part})
+		end,
+	case mnesia:transaction(T) of
+		{atomic, ok} ->
+			io:format("[unregister]: Unregistered participant ~w~n",[Part]);
+		Error ->
+			io:format("[unregister] ~p~n",[Error])
+	end.
+
 startup_send_iujp(_JP, _CurrentWorkcycle, []) -> ok;
 startup_send_iujp([], _CurrentWorkcycle, _ExptConsL) -> ok;
 startup_send_iujp(JPartL, CurrentWorkcycle, ExptConsL) ->
 	IUJMsg = management_message:info_update_joining_participants(JPartL, CurrentWorkcycle),
 	generic_send_to_participants(ExptConsL, IUJMsg),
+	ok.
+
+startup_send_iulp(_LP, _CurrentWorkcycle, []) -> ok;
+startup_send_iulp([], _CurrentWorkcycle, _ExptConsL) -> ok;
+startup_send_iulp(LPartL, CurrentWorkcycle, ExptConsL) ->
+	IULMsg = management_message:info_update_leaving_participants(LPartL, CurrentWorkcycle),
+	generic_send_to_participants(ExptConsL, IULMsg),
 	ok.
 
 % TODO edit timeout.
@@ -590,7 +674,28 @@ startup_set_participants_active(PartList, ForWhichWorkcycle) ->
 	case mnesia:transaction(SAT) of
 		{atomic, ok} -> ok;
 		Error -> 
-			io:format("[startup_set_participants_active]: There was something wrong with setting the participant active ~w~n",[Error]),
+			io:format("[startup_set_participants_active]: There was something wrong with setting the participant active ~w~n",
+				[Error]),
+			false
+	end.
+
+startup_set_participants_inactive([]) ->
+	ok;
+startup_set_participants_inactive(PartList) ->
+	SAT = fun() ->
+				PartRecs = lists:flatmap(fun(X) -> 
+									 	mnesia:read({participant_mgmt, X})
+									end, PartList),
+				lists:foreach(fun(X) ->
+								NPMI = X#participant_mgmt{active_from=-1, active_until=-1},
+								mnesia:write(NPMI) end, 
+								PartRecs) 
+			end,
+	case mnesia:transaction(SAT) of
+		{atomic, ok} -> ok;
+		Error -> 
+			io:format("[startup_set_participants_inactive]: There was something wrong with setting the participant active ~w~n",
+				[Error]),
 			false
 	end.
 

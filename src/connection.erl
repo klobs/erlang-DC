@@ -69,6 +69,8 @@ construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, <<MsgType:16, MsgLen:
 		{add, WCN, RN, AddMsg} ->
 			%io:format("Addmessage arrived: ~w ~n",[AddMsg]),
 			RTMsgHndlr ! {add, {part, Part}, {wcn, WCN}, {rn, RN}, {addmsg, AddMsg}};
+		{leaveworkcycle, WCN} ->
+			workcycle:leave_workcycle(Part, self(), WCN);
 		{error, Reason} -> 
 			io:format("Parseerror happended during message parsing: ~w!~n",[Reason])
 	end,

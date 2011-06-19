@@ -9,8 +9,10 @@
 -export([
 		accepted4service/1,
 		added/3,
+		info_early_quit_service/3,
 		info_passive_partlist/1,
 		info_update_joining_participants/2,
+		info_update_leaving_participants/2,
 		tick/1,
 		welcome2service/5,
 		welcome2workcycle/4]).
@@ -89,6 +91,8 @@ parse_message(TypeBin, _MsgBin) when TypeBin == ?ADDRESERVATION ->
 	{error, unimplemented_addreservation};
 
 %% Leave workcycle
+parse_message(TypeBin, <<WCN:64>>) when TypeBin == ?LEAVEWORKCYCLE ->
+	{leaveworkcycle, WCN};
 parse_message(TypeBin, _MsgBin) when TypeBin == ?LEAVEWORKCYCLE ->
 	{error, unimplemented_leaveworkcycle};
 
@@ -104,7 +108,7 @@ parse_message(_, _) ->
 	{error, unkown_error}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Messages from perver -> participant
+%% Messages from server -> participant
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 accepted4service(true) ->
@@ -121,6 +125,12 @@ added(WCN, RN, MsgBin) ->
 	PayloadSize = size(Payload),
 	list_to_binary([?ADDED, <<PayloadSize:16>>,Payload]).
 
+info_early_quit_service(LeavingPartL, Workcycle, RoundNumber) ->
+	InfoHead = << ?INFO_EARLYQUITNOTIFICATION:16, Workcycle:64, RoundNumber:16>>,
+	InfoList = participantlist(LeavingPartL),
+	TotalSize = size(list_to_binary([InfoHead,InfoList])),
+	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]).
+
 info_passive_partlist(PartList) when is_list(PartList) ->
 	InfoHead = << ?INFO_PASSIVEPARTICIPANTLIST:16>>,
 	InfoList = participantlist(PartList),
@@ -130,6 +140,12 @@ info_passive_partlist(PartList) when is_list(PartList) ->
 info_update_joining_participants(PartList, JoiningWhen) when is_list(PartList) ->
 	InfoHead = << ?INFO_UPDATEACTIVEJOINING:16>>,
 	InfoList = participant_update_list(PartList, JoiningWhen),
+	TotalSize = size(list_to_binary([InfoHead,InfoList])),
+	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]).
+
+info_update_leaving_participants(PartList, LeavingWhen) when is_list(PartList) ->
+	InfoHead = << ?INFO_UPDATEACTIVELEAVING:16>>,
+	InfoList = participant_update_list(PartList, LeavingWhen),
 	TotalSize = size(list_to_binary([InfoHead,InfoList])),
 	list_to_binary([?INFO, <<TotalSize:16 >>, InfoHead, InfoList]).
 
@@ -181,6 +197,6 @@ participant_to_binary(Participant) when is_record(Participant, participant) ->
 		DHSize:16, DH:DHSize/binary,
 		DHSigSize:16, DHSig:DHSigSize/binary>>];
 participant_to_binary(_) ->
-	io:format("wrong argument"),
+	io:format("[participant_to_binary]: wrong argument"),
 	[<<>>].
 
