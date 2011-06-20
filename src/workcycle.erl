@@ -239,7 +239,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
 	case length(NExpdPartConsL) == 0 of
 		true -> 
-			io:format("[reservation]: broadcast and new round~n"),
+			io:format("[reservation]: broadcast: ~w ~n", [NLocalSum]),
 			AddedMsg = management_message:added(State#state.current_workcycle, 
 											State#state.current_round_number, NLocalSum),
 			{_, NConfConsL} = lists:unzip(NConfPartConsL),
