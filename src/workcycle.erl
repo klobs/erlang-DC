@@ -540,7 +540,7 @@ handle_event({status}, StateName, State) ->
 	LenLeaving = length(State#state.participants_leaving),
 	io:format("[status]: Current WCN: ~w~n[status]: Current round: ~w
 [status]: Participants joining: ~w~n[status]: Participants  leaving: ~w
-[status]: Participants expected: ~w~n Participants confirmed: ~w~n
+[status]: Participants expected: ~w~n [status]: Participants confirmed: ~w~n
 [status]: state name: ~w~n", 
 		[State#state.current_workcycle, State#state.current_round_number, 
 			LenJoining, LenLeaving, LenExptd, LenConf, StateName]),
@@ -792,5 +792,7 @@ reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
 	%io:format("-1, _, ~w, _, _~n",[ParticipantCount]),
 	{not_finished, {ec,ParticipantCount}};
 reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, AddMsg) ->
-	io:format("[reservation_evaluator]: Error: Expr ~w, Indiv ~w, Addm ~w~n", [ExpectedRounds, IndividualMessageLengths, AddMsg]),
+	io:format("[reservation_evaluator]: Error: Expr ~w, Indiv ~w, Addm ~w~n", 
+		[ExpectedRounds, IndividualMessageLengths, AddMsg]),
+	io:get_line("reservation_evaluator:"),
 	{not_finished}.
