@@ -171,6 +171,9 @@ waiting({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 			end
 	end;
 
+waiting(start, State) ->
+	{next_state, waiting, State};
+
 waiting(Event, State) ->
 	io:format("[waiting]: event ~w is not for me~n", [Event]),
 	{next_state, waiting, State}.
