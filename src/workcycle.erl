@@ -318,10 +318,8 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 											participants_confirmed = NConfPartConsL}}
 	end;
 
-%% TODO Timeout
-%reservation({addtimeout, {part, P}, {con, C}, {wcn, W}, {rn, R}}, State) ->
-reservation({addtimeout, _, _, _, _}, State) ->
-	io:format("[reservation]: Todo implement handling for timeouts in reservation~n"),
+reservation({addtimeout, {part, P}, {con, _C}, {wcn, _W}, {rn, _R}}, State) ->
+	gen_fsm:send_all_state_event(?MODULE, {unregister, P}), 
 	{next_state, reservation, State};
 
 reservation({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
@@ -394,6 +392,10 @@ sending({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 	NewPartJoining = [PartController | State#state.participants_joining],
 	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, sending, NewState};
+
+sending({addtimeout, {part, P}, {con, _C}, {wcn, _W}, {rn, _R}}, State) ->
+	gen_fsm:send_all_state_event(?MODULE, {unregister, P}), 
+	{next_state, sending, State};
 
 sending(Event, State) ->
 	io:format("[sending]: don't know propper reaction for ~w in ~w state~n", [Event, State]),
