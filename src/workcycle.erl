@@ -536,14 +536,15 @@ handle_event({send_passive_partlist, Controller}, StateName, State) ->
 handle_event({status}, StateName, State) ->
 	LenConf = length(State#state.participants_confirmed),
 	LenExptd = length(State#state.participants_expected),
+	{_, ExptdCons} = lists:unzip(State#state.participants_expected),
 	LenJoining = length(State#state.participants_joining),
 	LenLeaving = length(State#state.participants_leaving),
 	io:format("[status]: Current WCN: ~w~n[status]: Current round: ~w
 [status]: Participants joining: ~w~n[status]: Participants  leaving: ~w
-[status]: Participants expected: ~w~n [status]: Participants confirmed: ~w~n
+[status]: Participants expected: ~w (~w)~n[status]: Participants confirmed: ~w~n
 [status]: state name: ~w~n", 
 		[State#state.current_workcycle, State#state.current_round_number, 
-			LenJoining, LenLeaving, LenExptd, LenConf, StateName]),
+			LenJoining, LenLeaving, LenExptd, ExptdCons, LenConf, StateName]),
 	{next_state, StateName, State};
 
 handle_event({ticktimeout, Timeout}, StateName, State) ->
@@ -692,7 +693,7 @@ generic_unregister_passive_participant(Part) ->
 		end,
 	case mnesia:transaction(T) of
 		{atomic, ok} ->
-			io:format("[unregister]: Unregistered participant ~w~n",[Part]);
+			io:format("[unregister]: Unregistered participant~n");
 		Error ->
 			io:format("[unregister] ~p~n",[Error])
 	end.
