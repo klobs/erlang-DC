@@ -7,12 +7,16 @@
 %% API
 -export([join_workcycle/2,
 		leave_workcycle/3,
+		force_next_tick/0,
 		get_passive_participant_list/0,
 		register_participant/2,
 		passive_participant_count/0,
 		send_active_partlist/1,
 		send_passive_partlist/1,
+		set_rtmsg_timeout/1,
+		set_tick_timeout/1,
 		start_link/0,
+		status/0,
 		unregister_participant/1]).
 
 %% gen_fsm callbacks
@@ -94,8 +98,27 @@ leave_workcycle(Part, Controller, WCN) when is_record(Part, participant),
 leave_workcycle(_, _, _) ->
 	{error, badargs}.
 
+force_next_tick() ->
+	gen_fsm:send_all_state_event(?MODULE, {force_next_tick}),
+	gen_fsm:send_event(?MODULE, start).
+
 start_link() ->
   gen_fsm:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+set_rtmsg_timeout(infinity) ->
+	gen_fsm:send_all_state_event(?MODULE, {rtmsgtimeout, infinity}),
+	ok;
+set_rtmsg_timeout(Timeout) when is_integer(Timeout) ->
+	gen_fsm:send_all_state_event(?MODULE, {rtmsgtimeout, Timeout}),
+	ok.
+
+set_tick_timeout(Timeout) when is_integer(Timeout) ->
+	gen_fsm:send_all_state_event(?MODULE, {ticktimeout, Timeout}),
+	ok.
+
+status() ->
+	gen_fsm:send_all_state_event(?MODULE, {status}),
+	ok.
 
 %%====================================================================
 %% gen_fsm callbacks
@@ -181,11 +204,15 @@ startup(start, State) ->
 			spawn(F),
 			ReservationState = #state{
 				current_workcycle = State#state.current_workcycle,
+				ticktimeout = State#state.ticktimeout,
+				rtmsgtimeout = State#state.rtmsgtimeout,
 				participants_expected=NExpdPartConsL, 
 				participants_joining=[]},
 			{next_state, reservation, ReservationState};
 		false ->
-			{next_state, waiting, #state{current_workcycle = CurrentWorkcycle +1}}
+			{next_state, waiting, #state{current_workcycle = CurrentWorkcycle +1, 
+										rtmsgtimeout = State#state.rtmsgtimeout, 
+										ticktimeout = State#state.ticktimeout}}
 	end;
 
 startup({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
@@ -316,7 +343,7 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
 	case length(NExpdPartConsL) == 0 of
 		true -> 
-			%io:format("[sending]: broadcast and new round~n"),
+			io:format("[sending]: broadcast ~w~n", [NLocalSum]),
 			AddedMsg = management_message:added(State#state.current_workcycle, 
 											State#state.current_round_number, NLocalSum),
 			%io:format("[sending]: Unzipping lists~n"),
@@ -412,6 +439,16 @@ sending(_Event, _From, State) ->
 %% the event.
 %%--------------------------------------------------------------------
 
+handle_event({force_next_tick}, StateName, State) ->
+	io:format("[force_next_tick]: Switching from ~w to startup~n",[StateName]),
+	CWN = State#state.current_workcycle,
+	NState = #state{current_workcycle = CWN +1,
+					participants_joining = State#state.participants_joining,
+					participants_leaving = State#state.participants_leaving,
+					rtmsgtimeout = State#state.rtmsgtimeout,
+					ticktimeout = State#state.ticktimeout },
+	{next_state, startup, NState};
+
 handle_event({leaveworkcycle, {Part, _Controller, WCN}}, StateName, State) ->
 	CurrentWCN = State#state.current_workcycle,
 	F = fun() ->
@@ -451,6 +488,10 @@ handle_event({register, {Part, Controller}}, StateName, State) when is_record(Pa
 			{next_state, StateName, State}
 	end;
 
+handle_event({rtmsgtimeout, Timeout}, StateName, State) ->
+	NState = State#state{rtmsgtimeout = Timeout},
+	{next_state, StateName, NState};
+
 handle_event({unregister, Part}, StateName, State) when is_record(Part, participant) ->
 	CWN = State#state.current_workcycle,
 	case generic_is_participant_active(Part, CWN) of
@@ -462,6 +503,8 @@ handle_event({unregister, Part}, StateName, State) when is_record(Part, particip
 			generic_send_info_early_quit_service(Part, CWN, State#state.current_round_number, AConL),
 			generic_unregister_passive_participant(Part),
 			NState = #state{current_workcycle = CWN +1,
+							rtmsgtimeout = State#state.rtmsgtimeout,
+							ticktimeout = State#state.ticktimeout,
 							participants_joining = State#state.participants_joining,
 							participants_leaving = State#state.participants_leaving
 							},
@@ -478,6 +521,23 @@ handle_event({send_passive_partlist, Controller}, StateName, State) ->
 	Msg = management_message:info_passive_partlist(PartList),
 	Controller ! {forward_to_participant, {msg, Msg}},
 	{next_state, StateName, State};	
+
+handle_event({status}, StateName, State) ->
+	LenConf = length(State#state.participants_confirmed),
+	LenExptd = length(State#state.participants_expected),
+	LenJoining = length(State#state.participants_joining),
+	LenLeaving = length(State#state.participants_leaving),
+	io:format("[status]: Current WCN: ~w~n[status]: Current round: ~w
+[status]: Participants joining: ~w~n[status]: Participants  leaving: ~w
+[status]: Participants expected: ~w~n Participants confirmed: ~w~n
+[status]: state name: ~w~n", 
+		[State#state.current_workcycle, State#state.current_round_number, 
+			LenJoining, LenLeaving, LenExptd, LenConf, StateName]),
+	{next_state, StateName, State};
+
+handle_event({ticktimeout, Timeout}, StateName, State) ->
+	NState = State#state{ticktimeout = Timeout},
+	{next_state, StateName, NState};
 
 handle_event(_Event, StateName, State) ->
   {next_state, StateName, State}.
