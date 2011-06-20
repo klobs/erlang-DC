@@ -477,19 +477,25 @@ handle_event({leaveworkcycle, {Part, _Controller, WCN}}, StateName, State) ->
 	{next_state, StateName, State};
 
 handle_event({register, {Part, Controller}}, StateName, State) when is_record(Part, participant) ->
-	M = management_message:accepted4service(true),
-	Controller ! {forward_to_participant, {msg,M}},
-	%gen_tcp:send(Sock, M),
-	PMI = #participant_mgmt{ participant = Part, controller = Controller },
 	T = fun() ->
-		mnesia:write(PMI),
-		ok
+		R = mnesia:wread({participant_mgmt, Part}),
+		case R of
+			[] -> 
+				M = management_message:accepted4service(true),
+				Controller ! {forward_to_participant, {msg,M}},
+				PMI = #participant_mgmt{ participant = Part, controller = Controller },
+				mnesia:write(PMI),
+				ok;
+			_E -> 
+				io:format("[registration]: there already is such a participant~n"),
+				mnesia:abort(participant_already_registered)
+		end
 		end,
 	case mnesia:transaction(T) of
 		{atomic, ok} -> 
 			{next_state, StateName, State};
 		_ -> 
-			io:format("Problems while registering new participants~n"),
+			Controller ! {close_socket_immediately},
 			{next_state, StateName, State}
 	end;
 

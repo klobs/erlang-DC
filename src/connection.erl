@@ -53,6 +53,10 @@ listen(Sock, Part, RTMsgHndlr, IncompleteMessage) ->
 									{wcn, WC}, {rn, RN}, {timeout, Timeout}},
 			listen(Sock, Part, RTMsgHndlr, IncompleteMessage);
 
+		{close_socket_immediately} ->
+			gen_tcp:close(Sock),
+			ok;
+
 		Error ->
 			io:format("Arbritrary message on Socket ~w: ~w~n", [Sock, Error]),
 			listen(Sock,Part, RTMsgHndlr, IncompleteMessage)
