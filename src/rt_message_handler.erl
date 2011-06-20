@@ -7,6 +7,7 @@ rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, B}}) ->
 			io:format("[rt_message_handler][wait]: have to wait for ~w ~w~n",[W,R]),
 			rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, W}, {rn, R}, {bufferlist, B}, {timeout, T}});
 		{wait_for_realtime_msg, {wcn, NW}, {rn, R}, {timeout, T}} ->
+			io:format("[rt_message_handler][wait]: switching to wait for new wcn ~w~n",[NW]),
 			rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, NW}, {rn, R}, {bufferlist, []}, {timeout, T}});
 		{add, {part, P}, {wcn, W}, {rn, R}, {addmsg, A}} ->
 			io:format("rt_message_handler: not yet in receive_rt mode, buffering message: ~w~n",[A]),
@@ -24,7 +25,8 @@ rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, W}, {rn, R}, {bufferl
 			gen_fsm:send_event(workcycle, {add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}),
 			rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, []}});
 		{add, {part, P}, {wcn, W}, {rn, NR}, {addmsg, A}} when NR >= R ->
-			io:format("rt_message_handler: officially  waiting for older messages. buffering: ~w~n",[A]),
+			io:format("[rt_message_handler]: officially  waiting for older messages (wc ~w rn ~w). buffering: nrn: ~w ~w~n",
+				[W, R, NR,A]),
 				rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, 
 						{bufferlist, [{add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}]}});
 		{wait_for_realtime_msg, {wcn, NW}, {rn, NR}, {timeout, T}} ->
