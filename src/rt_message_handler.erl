@@ -24,9 +24,9 @@ rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, W}, {rn, R}, {bufferl
 			io:format("[rt_message_handler][rt]: Add message received for wcn ~w round ~w~n",[W,R]),
 			gen_fsm:send_event(workcycle, {add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}),
 			rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, {bufferlist, []}});
-		{add, {part, P}, {wcn, W}, {rn, NR}, {addmsg, A}} when NR >= R ->
+		{add, {part, P}, {wcn, W}, {rn, RN}, {addmsg, A}} when RN >= R ->
 			io:format("[rt_message_handler][rt]: officially  waiting for older messages (wc ~w rn ~w). buffering: nrn: ~w ~w~n",
-				[W, R, NR,A]),
+				[W, R, RN,A]),
 				rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, 
 						{bufferlist, [{add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}]}});
 		{wait_for_realtime_msg, {wcn, NW}, {rn, R}, {timeout, T}} ->
