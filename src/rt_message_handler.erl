@@ -29,9 +29,9 @@ rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, W}, {rn, R}, {bufferl
 				[W, R, NR,A]),
 				rt_message_handler({wait, {part, P}, {con, C}, {wcn, W}, 
 						{bufferlist, [{add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, A}}]}});
-		{wait_for_realtime_msg, {wcn, NW}, {rn, NR}, {timeout, T}} ->
-			io:format("[rt_message_handler][rt]: now waiting for wcn ~w, rn ~w~n", [NW, NR]),
-			rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, NW}, {rn, NR}, {bufferlist, []}, {timeout, T}});
+		{wait_for_realtime_msg, {wcn, NW}, {rn, R}, {timeout, T}} ->
+			io:format("[rt_message_handler][rt]: now waiting for ~w ~w~n",[NW, R],
+			rt_message_handler({receive_rt, {part, P}, {con, C}, {wcn, NW}, {rn, R}, {bufferlist, []}, {timeout, T}});
 		Error ->
 			io:format("[rt_message_handler][rt]: This message is not for me [rt]: ~w ~n (waiting for wcn ~w and rn ~w)~n",
 				[Error, W, R]),
