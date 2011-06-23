@@ -6,6 +6,4 @@
               {mod,{erlangDC_app,[]}},
               {env,[]},
               {modules,[connection,dc_server,erlangDC_app,erlangDC_sup,
-                        management_message,participant_manager,
-                        round_event_manager,round_manager,round_manager_sup,
-                        rt_message_handler,workcycle]}]}.
+                        management_message,rt_message_handler,workcycle]}]}.
