@@ -14,7 +14,7 @@
 			num_joining = -1,
 			num_kicked  =  0,
 			num_leaving = -1,
-			num_rounds  = -1}
+			num_rounds  = -1}).
 
 
 %% API
@@ -40,8 +40,9 @@
 %% this function is called to initialize the event handler.
 %%--------------------------------------------------------------------
 init([]) ->
-	mnesia:create_table(wcn_total_stats, 
-		[{attributes, record_info(fields,wcn_total_stats)}]),
+	util:safe_mnesia_create_table(wcn_total_stats, 
+				[{disc_copies, [node()]},
+				{attributes, record_info(fields,wcn_total_stats)}]),
 	{ok, state}.
 
 %%--------------------------------------------------------------------
