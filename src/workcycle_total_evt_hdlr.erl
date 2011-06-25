@@ -42,9 +42,9 @@ dump_to_csv() ->
 %% this function is called to initialize the event handler.
 %%--------------------------------------------------------------------
 init([]) ->
-	error_logger:info_msg("Total statistic event handler is coming up~n"),
 	utils:safe_mnesia_create_table(wcn_total_stats,
 		[{attributes, record_info(fields,wcn_total_stats)}]),
+	error_logger:info_msg("Total statistic event handler is coming up~n"),
 	{ok, state}.
 
 %%--------------------------------------------------------------------
@@ -108,7 +108,7 @@ handle_event(dump_to_csv, State) ->
 		end,
 	case mnesia:transaction(T) of
 			{atomic, AList} ->
-					Filename = integer_to_list(util:mk_timestamp_us()),
+					Filename = ["log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
 					io:format(IODevice, "~w~n", [AList]),
 					%lists:foreach
@@ -118,7 +118,8 @@ handle_event(dump_to_csv, State) ->
 	end,
 	{ok, State};
 
-handle_event(_Event, State) ->
+handle_event(Event, State) ->
+  error_logger:warning_msg("[total statistics]: Unknown event~w~n",[Event]),
   {ok, State}.
 
 %%--------------------------------------------------------------------
@@ -165,7 +166,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 wc_start(WCN, Timestamp) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, wc_start = Timestamp});
 				[R] ->
@@ -177,7 +178,7 @@ wc_start(WCN, Timestamp) ->
 
 wc_stop(WCN, Timestamp) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, wc_stop = Timestamp});
 				[R] ->
@@ -189,7 +190,7 @@ wc_stop(WCN, Timestamp) ->
 
 res_start(WCN, Timestamp) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, res_start = Timestamp});
 				[R] ->
@@ -201,7 +202,7 @@ res_start(WCN, Timestamp) ->
 
 res_stop(WCN, Timestamp) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, res_stop = Timestamp});
 				[R] ->
@@ -213,7 +214,7 @@ res_stop(WCN, Timestamp) ->
 
 send_start(WCN, Timestamp) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, send_start = Timestamp});
 				[R] ->
@@ -225,7 +226,7 @@ send_start(WCN, Timestamp) ->
 
 send_stop(WCN, Timestamp) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, send_stop = Timestamp});
 				[R] ->
@@ -237,7 +238,7 @@ send_stop(WCN, Timestamp) ->
 
 count_active(WCN, Count) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, count_active = Count});
 				[R] ->
@@ -249,7 +250,7 @@ count_active(WCN, Count) ->
 
 count_joining(WCN, Count) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, count_joining = Count});
 				[R] ->
@@ -261,7 +262,7 @@ count_joining(WCN, Count) ->
 
 count_kicked(WCN, Count) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, count_kicked = Count});
 				[R] ->
@@ -273,7 +274,7 @@ count_kicked(WCN, Count) ->
 
 count_leaving(WCN, Count) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, count_leaving = Count});
 				[R] ->
@@ -285,7 +286,7 @@ count_leaving(WCN, Count) ->
 
 count_rounds(WCN, Count) ->
 	T = fun() ->
-			case mnesia:read() of
+			case mnesia:read({wcn_total_stats, WCN}) of
 				[] ->
 					mnesia:write(#wcn_total_stats{wcn = WCN, count_rounds = Count});
 				[R] ->
