@@ -42,7 +42,7 @@ dump_to_csv() ->
 %% this function is called to initialize the event handler.
 %%--------------------------------------------------------------------
 init([]) ->
-	utils:safe_mnesia_create_table(wcn_total_stats,
+	util:safe_mnesia_create_table(wcn_total_stats,
 		[{attributes, record_info(fields,wcn_total_stats)}]),
 	error_logger:info_msg("Total statistic event handler is coming up~n"),
 	{ok, state}.
