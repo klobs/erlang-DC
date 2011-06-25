@@ -110,8 +110,14 @@ handle_event(dump_to_csv, State) ->
 			{atomic, AList} ->
 					Filename = ["log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
-					io:format(IODevice, "~w~n", [AList]),
-					%lists:foreach
+					lists:foreach( fun(X) -> io:format(IODevice, "~w,~w,~w,~w,~w,~w,~w,~w,~w,~w,~w,~w~n", [
+										X#wcn_total_stats.wcn           , X#wcn_total_stats.wc_start,
+										X#wcn_total_stats.wc_stop       , X#wcn_total_stats.res_start,
+										X#wcn_total_stats.res_stop      , X#wcn_total_stats.send_start    ,
+										X#wcn_total_stats.send_stop     , X#wcn_total_stats.count_active  ,
+										X#wcn_total_stats.count_joining , X#wcn_total_stats.count_kicked  ,
+										X#wcn_total_stats.count_leaving , X#wcn_total_stats.count_rounds  
+									]) end,[AList]),
 					file:close(IODevice);
 			Error -> 
 				error_logger:error_msg("Error reading total statistics database: ~w ~n", [Error])
