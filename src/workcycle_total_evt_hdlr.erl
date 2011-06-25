@@ -1,5 +1,5 @@
 -module(workcycle_total_evt_hdlr).
-
+-include_lib("stdlib/include/qlc.hrl").
 -behaviour(gen_event).
 
 -record(wcn_total_stats, {
@@ -18,7 +18,7 @@
 
 
 %% API
-%-export([]).
+-export([dump_to_csv/0]).
 
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2,
@@ -30,6 +30,8 @@
 %%--------------------------------------------------------------------
 %%--------------------------------------------------------------------
 
+dump_to_csv() ->
+	workcycle_evt_mgr:notify(dump_to_csv).
 
 %%====================================================================
 %% gen_event callbacks
@@ -96,6 +98,22 @@ handle_event({count_leaving, WCN, Count}, State) ->
 
 handle_event({count_rounds, WCN, Count}, State) ->
 	count_rounds(WCN, Count),
+	{ok, State};
+
+handle_event(dump_to_csv, State) ->
+	T = fun() ->
+			qlc:e( qlc:q([ X || X <- mnesia:table(wcn_total_stats)]))
+		end,
+	case mnesia:transaction(T) of
+			{atomic, AList} ->
+					Filename = integer_to_list(util:mk_timestamp_us()),
+					{ok, IODevice} = file:open(Filename, [append]),
+					io:format("~w~n",[AList]),
+					%lists:foreach
+					file:close(IODevice);
+			Error -> 
+				error_logger:error_msg("Error reading total statistics database: ~w ~n", [Error])
+	end,
 	{ok, State};
 
 handle_event(_Event, State) ->
