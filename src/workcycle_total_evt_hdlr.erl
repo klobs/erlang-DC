@@ -42,6 +42,7 @@ dump_to_csv() ->
 %% this function is called to initialize the event handler.
 %%--------------------------------------------------------------------
 init([]) ->
+	error_logger:info_msg("Total statistic event handler is coming up~n"),
 	utils:safe_mnesia_create_table(wcn_total_stats,
 		[{attributes, record_info(fields,wcn_total_stats)}]),
 	{ok, state}.
@@ -101,6 +102,7 @@ handle_event({count_rounds, WCN, Count}, State) ->
 	{ok, State};
 
 handle_event(dump_to_csv, State) ->
+	io:format("[totat_stats]: dumping to csv~n"),
 	T = fun() ->
 			qlc:e( qlc:q([ X || X <- mnesia:table(wcn_total_stats)]))
 		end,
@@ -108,7 +110,7 @@ handle_event(dump_to_csv, State) ->
 			{atomic, AList} ->
 					Filename = integer_to_list(util:mk_timestamp_us()),
 					{ok, IODevice} = file:open(Filename, [append]),
-					io:format("~w~n",[AList]),
+					io:format(IODevice, "~w~n", [AList]),
 					%lists:foreach
 					file:close(IODevice);
 			Error -> 
