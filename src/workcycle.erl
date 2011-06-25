@@ -362,6 +362,9 @@ reservation({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, reservation, NewState};
 
+reservation(start, State) ->
+	{next_state, reservation, State};
+
 reservation(Event, State) ->
 	io:format("[reservation]: dont know how to handle event ~w in state ~w~n",[Event, State]),
 	{next_state, reservation, State}.
@@ -432,6 +435,9 @@ sending({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 
 sending({addtimeout, {part, P}, {con, _C}, {wcn, _W}, {rn, _R}}, State) ->
 	gen_fsm:send_all_state_event(?MODULE, {unregister, P}), 
+	{next_state, sending, State};
+
+sending(start, State) ->
 	{next_state, sending, State};
 
 sending(Event, State) ->
