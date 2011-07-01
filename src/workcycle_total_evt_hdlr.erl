@@ -174,15 +174,14 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-
-?CREATE_OR_UPDATE(wcn_total_stats, wc_start).
-?CREATE_OR_UPDATE(wcn_total_stats, wc_stop).
-?CREATE_OR_UPDATE(wcn_total_stats, res_start).
-?CREATE_OR_UPDATE(wcn_total_stats, res_stop).
-?CREATE_OR_UPDATE(wcn_total_stats, send_start).
-?CREATE_OR_UPDATE(wcn_total_stats, send_stop).
-?CREATE_OR_UPDATE(wcn_total_stats, count_active).
-?CREATE_OR_UPDATE(wcn_total_stats, count_joining).
-?CREATE_OR_UPDATE(wcn_total_stats, count_kicked).
-?CREATE_OR_UPDATE(wcn_total_stats, count_leaving).
-?CREATE_OR_UPDATE(wcn_total_stats, count_rounds).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, wc_start).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, wc_stop).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, res_start).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, res_stop).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, send_start).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, send_stop).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, count_active).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, count_joining).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, count_kicked).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, count_leaving).
+?CREATE_OR_UPDATE(wcn_total_stats, wcn, count_rounds).
