@@ -2,19 +2,21 @@
 -include_lib("stdlib/include/qlc.hrl").
 -behaviour(gen_event).
 
+-include("util.hrl").
+
 -record(wcn_total_stats, {
-			wcn           = -1,
-			wc_start      = -1,
-			wc_stop       = -1,
-			res_start     = -1,
-			res_stop      = -1,
-			send_start    = -1,
-			send_stop     = -1,
-			count_active  = -1,
-			count_joining = -1,
+			wcn           ,
+			wc_start      ,
+			wc_stop       ,
+			res_start     ,
+			res_stop      ,
+			send_start    ,
+			send_stop     ,
+			count_active  ,
+			count_joining ,
 			count_kicked  = 0,
-			count_leaving = -1,
-			count_rounds  = -1}).
+			count_leaving ,
+			count_rounds}).
 
 
 %% API
@@ -108,16 +110,18 @@ handle_event(dump_to_csv, State) ->
 		end,
 	case mnesia:transaction(T) of
 			{atomic, AList} ->
-					Filename = ["log-"|integer_to_list(util:mk_timestamp_us())],
+					Filename = ["log/log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
-					lists:foreach( fun(X) -> io:format(IODevice, "~w,~w,~w,~w,~w,~w,~w,~w,~w,~w,~w,~w~n", [
-										X#wcn_total_stats.wcn           , X#wcn_total_stats.wc_start,
-										X#wcn_total_stats.wc_stop       , X#wcn_total_stats.res_start,
-										X#wcn_total_stats.res_stop      , X#wcn_total_stats.send_start    ,
-										X#wcn_total_stats.send_stop     , X#wcn_total_stats.count_active  ,
-										X#wcn_total_stats.count_joining , X#wcn_total_stats.count_kicked  ,
-										X#wcn_total_stats.count_leaving , X#wcn_total_stats.count_rounds  
-									]) end,[AList]),
+					io:format(IODevice, "wcn,wc_start, wc_stop, res_start, res_stop, send_start, send_stop, count_active, count_joining, count_kicked, count_leaving, count_rounds~n", []),
+					lists:foreach( fun(X) -> 
+										N1 = X#wcn_total_stats.wcn            , N2 = X#wcn_total_stats.wc_start     ,
+										N3 = X#wcn_total_stats.wc_stop        , N4 = X#wcn_total_stats.res_start    ,
+										N5 = X#wcn_total_stats.res_stop       , N6 = X#wcn_total_stats.send_start   ,
+										N7 = X#wcn_total_stats.send_stop      , N8 = X#wcn_total_stats.count_active ,
+										N9 = X#wcn_total_stats.count_joining  , N10 = X#wcn_total_stats.count_kicked,
+										N11= X#wcn_total_stats.count_leaving  , N12 = X#wcn_total_stats.count_rounds,
+										io:format(IODevice, "~w,~w,~w,~w,~w,~w,~w,~w,~w,~w,~w,~w~n", 
+											[N1, N2, N3, N4, N5, N6, N7, N8, N9, N10, N11, N12]) end, AList),
 					file:close(IODevice);
 			Error -> 
 				error_logger:error_msg("Error reading total statistics database: ~w ~n", [Error])
@@ -170,134 +174,15 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-wc_start(WCN, Timestamp) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, wc_start = Timestamp});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, wc_start = Timestamp})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
 
-wc_stop(WCN, Timestamp) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, wc_stop = Timestamp});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, wc_stop = Timestamp})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-res_start(WCN, Timestamp) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, res_start = Timestamp});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, res_start = Timestamp})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-res_stop(WCN, Timestamp) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, res_stop = Timestamp});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, res_stop = Timestamp})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-send_start(WCN, Timestamp) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, send_start = Timestamp});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, send_start = Timestamp})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-send_stop(WCN, Timestamp) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, send_stop = Timestamp});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, send_stop = Timestamp})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-count_active(WCN, Count) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, count_active = Count});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, count_active = Count})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-count_joining(WCN, Count) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, count_joining = Count});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, count_joining = Count})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-count_kicked(WCN, Count) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, count_kicked = Count});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, count_kicked = Count})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-count_leaving(WCN, Count) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, count_leaving = Count});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, count_leaving = Count})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
-
-count_rounds(WCN, Count) ->
-	T = fun() ->
-			case mnesia:read({wcn_total_stats, WCN}) of
-				[] ->
-					mnesia:write(#wcn_total_stats{wcn = WCN, count_rounds = Count});
-				[R] ->
-					mnesia:write(R#wcn_total_stats{wcn = WCN, count_rounds = Count})
-			end
-	end,
-	{atomic, ok} = mnesia:transaction(T),
-	ok.
+?CREATE_OR_UPDATE(wcn_total_stats, wc_start).
+?CREATE_OR_UPDATE(wcn_total_stats, wc_stop).
+?CREATE_OR_UPDATE(wcn_total_stats, res_start).
+?CREATE_OR_UPDATE(wcn_total_stats, res_stop).
+?CREATE_OR_UPDATE(wcn_total_stats, send_start).
+?CREATE_OR_UPDATE(wcn_total_stats, send_stop).
+?CREATE_OR_UPDATE(wcn_total_stats, count_active).
+?CREATE_OR_UPDATE(wcn_total_stats, count_joining).
+?CREATE_OR_UPDATE(wcn_total_stats, count_kicked).
+?CREATE_OR_UPDATE(wcn_total_stats, count_leaving).
+?CREATE_OR_UPDATE(wcn_total_stats, count_rounds).
