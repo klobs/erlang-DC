@@ -43,6 +43,11 @@
 -define(RESERVATION_LENGTH , 12).
 -define(MODULO             , 16#100000000).
 
+-define(WCN_GUARD, 50).
+
+-record(init, {init = 0,
+				initial_workcycle = 0}).
+
 -record(state,{     %Needed for every state   
 	   				current_workcycle                    = 0,
 					participants_joining                 = [],
@@ -133,10 +138,23 @@ status() ->
 %% initialize.
 %%--------------------------------------------------------------------
 init([]) ->
-	mnesia:create_table(participant_mgmt, 
-		[{attributes, record_info(fields,participant_mgmt)}]),
+	workcycle_evt_mgr:start_link(),
+	workcycle_evt_mgr:add_handler(workcycle_total_evt_hdlr),
+	util:safe_mnesia_create_table( init, 
+					[{disc_copies, [node()]}, 
+								{attributes, record_info(fields, init)}]),
+	T = fun() -> 
+		RL = mnesia:read({init, 0}),
+		case RL of
+			[] -> -(?WCN_GUARD + 1);
+			[I] -> I#init.initial_workcycle
+		end
+	end, 
+	{atomic, Initial_wcn} = mnesia:transaction(T),
+	util:safe_mnesia_create_table( participant_mgmt, 
+					[{attributes, record_info(fields, participant_mgmt)}]),
 	mnesia:add_table_index(participant_mgmt, active_from),
-	{ok, waiting, #state{}}.
+	{ok, waiting, #state{current_workcycle = Initial_wcn + ?WCN_GUARD + 1}}.
 
 %%--------------------------------------------------------------------
 %% Function:
@@ -181,6 +199,8 @@ waiting(Event, State) ->
 
 startup(start, State) ->
 	CurrentWorkcycle = State#state.current_workcycle,
+	workcycle_evt_mgr:notify({wc_start, CurrentWorkcycle, util:mk_timestamp_us()}),
+	startup_test_and_store_wcn(CurrentWorkcycle),
 	LPartConsL = generic_get_leaving_participant_list(CurrentWorkcycle),
 	{LPartL, LConsL} = lists:unzip(LPartConsL),
 	{JPartL, JConsL} = lists:unzip(State#state.participants_joining),
@@ -202,6 +222,7 @@ startup(start, State) ->
 						after State#state.ticktimeout ->
 							true
 					end,
+					workcycle_evt_mgr:notify({res_start, CurrentWorkcycle, util:mk_timestamp_us()}),
 					startup_send_tick(NExpdConsL, CurrentWorkcycle, State#state.rtmsgtimeout)
 			end,
 			spawn(F),
@@ -211,6 +232,9 @@ startup(start, State) ->
 				rtmsgtimeout = State#state.rtmsgtimeout,
 				participants_expected=NExpdPartConsL, 
 				participants_joining=[]},
+			workcycle_evt_mgr:notify({count_active  , CurrentWorkcycle, length(NExpdConsL)}),
+			workcycle_evt_mgr:notify({count_joining , CurrentWorkcycle, length(JConsL)}),
+			workcycle_evt_mgr:notify({count_leaving , CurrentWorkcycle, length(LConsL)}),
 			{next_state, reservation, ReservationState};
 		false ->
 			{next_state, waiting, #state{current_workcycle = CurrentWorkcycle +1, 
@@ -287,6 +311,12 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 					{next_state, reservation, NewState};
 				{finished, {iml,[]}} -> %% Es gibt keine Teilnehmer -> neuer Workcycle
 					io:format("Reservation finished - no participant wanted to send -> next workcycle~n"),
+					workcycle_evt_mgr:notify({count_rounds, W, 0}),
+					Now = util:mk_timestamp_us(),
+					workcycle_evt_mgr:notify({res_stop, W, Now}),
+					workcycle_evt_mgr:notify({send_start, W, Now}),
+					workcycle_evt_mgr:notify({send_stop, W, Now}),
+					workcycle_evt_mgr:notify({wc_stop, W, Now}),
 					NewState = #state{
 							current_workcycle     = W + 1,
 							rtmsgtimeout          = State#state.rtmsgtimeout,
@@ -299,6 +329,10 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 					{next_state, startup, NewState};
 				{finished, {iml, [NextMsgLengthBytes|RestMessages]}} ->
 					io:format("Reservation finished -> next round~n"),
+					workcycle_evt_mgr:notify({count_rounds, W, length([RestMessages]) + 1}),
+					Now = util:mk_timestamp_us(),
+					workcycle_evt_mgr:notify({res_stop, W, Now}),
+					workcycle_evt_mgr:notify({send_start, W, Now}),
 					generic_send_to_connections(NConfConsL, 
 						{ 
 						wait_for_realtime_msg, {wcn, W}, 
@@ -327,6 +361,9 @@ reservation({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 	NewPartJoining = [PartController | State#state.participants_joining],
 	NewState = State#state{participants_joining = NewPartJoining},
 	{next_state, reservation, NewState};
+
+reservation(start, State) ->
+	{next_state, reservation, State};
 
 reservation(Event, State) ->
 	io:format("[reservation]: dont know how to handle event ~w in state ~w~n",[Event, State]),
@@ -363,6 +400,9 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 									participants_leaving  = State#state.participants_leaving
 										},
 					gen_fsm:send_event(?MODULE, start),
+					Now = util:mk_timestamp_us(),
+					workcycle_evt_mgr:notify({send_stop, W, Now}),
+					workcycle_evt_mgr:notify({wc_stop, W, Now}),
 					{next_state, startup, NState};
 				_L ->
 					%io:format("... nope: there are ~w further rounds expectd~n",[L]),
@@ -395,6 +435,9 @@ sending({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 
 sending({addtimeout, {part, P}, {con, _C}, {wcn, _W}, {rn, _R}}, State) ->
 	gen_fsm:send_all_state_event(?MODULE, {unregister, P}), 
+	{next_state, sending, State};
+
+sending(start, State) ->
 	{next_state, sending, State};
 
 sending(Event, State) ->
@@ -770,6 +813,14 @@ startup_set_participants_inactive(PartList) ->
 				[Error]),
 			false
 	end.
+
+startup_test_and_store_wcn(WCN) when (WCN rem ?WCN_GUARD) =:= 0 ->
+	T = fun() ->
+			mnesia:write(#init{ initial_workcycle = WCN})
+	end,
+	mnesia:transaction(T);
+startup_test_and_store_wcn(_WCN) ->
+	ok.
 
 reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
 			<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->

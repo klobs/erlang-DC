@@ -8,4 +8,6 @@
               {modules,[connection,dc_server,erlangDC_app,erlangDC_sup,
                         management_message,participant_manager,
                         round_event_manager,round_manager,round_manager_sup,
-                        rt_message_handler,workcycle]}]}.
+                        rt_message_handler,util,workcycle,
+                        workcycle_detailed_evt_hdlr,workcycle_evt_mgr,
+                        workcycle_total_evt_hdlr]}]}.
