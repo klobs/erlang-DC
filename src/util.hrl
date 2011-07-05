@@ -8,4 +8,4 @@
 					end
 			end,
 			{atomic, ok} = mnesia:transaction(T),
-			ok.
+			ok).

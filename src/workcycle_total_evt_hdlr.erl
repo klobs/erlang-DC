@@ -104,13 +104,12 @@ handle_event({count_rounds, WCN, Count}, State) ->
 	{ok, State};
 
 handle_event(dump_to_csv, State) ->
-	io:format("[totat_stats]: dumping to csv~n"),
 	T = fun() ->
 			qlc:e( qlc:q([ X || X <- mnesia:table(wcn_total_stats)]))
 		end,
 	case mnesia:transaction(T) of
 			{atomic, AList} ->
-					Filename = ["log/log-"|integer_to_list(util:mk_timestamp_us())],
+					Filename = ["log/total-log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
 					io:format(IODevice, "wcn,wc_start, wc_stop, res_start, res_stop, send_start, send_stop, count_active, count_joining, count_kicked, count_leaving, count_rounds~n", []),
 					lists:foreach( fun(X) -> 
@@ -128,8 +127,7 @@ handle_event(dump_to_csv, State) ->
 	end,
 	{ok, State};
 
-handle_event(Event, State) ->
-  error_logger:warning_msg("[total statistics]: Unknown event~w~n",[Event]),
+handle_event(_Event, State) ->
   {ok, State}.
 
 %%--------------------------------------------------------------------

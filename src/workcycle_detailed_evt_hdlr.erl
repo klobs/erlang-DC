@@ -1,24 +1,20 @@
 -module(workcycle_detailed_evt_hdlr).
-
+-include_lib("stdlib/include/qlc.hrl").
 -behaviour(gen_event).
 
--record(wcn_total_stats, { 
-			wcn         = -1,
-			wc_start    = -1,
-			wc_end      = -1,
-			res_start   = -1,
-			res_stop    = -1,
-			send_start  = -1,
-			send_stop   = -1,
-			num_active  = -1,
-			num_joining = -1,
-			num_kicked  =  0,
-			num_leaving = -1,
-			num_rounds  = -1}).
+-include("util.hrl").
+
+-record(wcn_detailed_stats , {
+			wcn            ,
+			rn             ,
+			type           ,
+			msglength      ,
+			partid         ,
+			timestamp }).
 
 
 %% API
-%-export([]).
+-export([dump_to_csv/0]).
 
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2,
@@ -30,6 +26,8 @@
 %%--------------------------------------------------------------------
 %%--------------------------------------------------------------------
 
+dump_to_csv() ->
+	workcycle_evt_mgr:notify(dump_to_csv).
 
 %%====================================================================
 %% gen_event callbacks
@@ -40,9 +38,9 @@
 %% this function is called to initialize the event handler.
 %%--------------------------------------------------------------------
 init([]) ->
-	util:safe_mnesia_create_table(wcn_total_stats, 
-				[{disc_copies, [node()]},
-				{attributes, record_info(fields,wcn_total_stats)}]),
+	util:safe_mnesia_create_table(wcn_detailed_stats,
+		[{attributes, record_info(fields, wcn_detailed_stats)}, {type, bag}]),
+	error_logger:info_msg("Detailed statistic event handler is coming up~n"),
 	{ok, state}.
 
 %%--------------------------------------------------------------------
@@ -54,6 +52,44 @@ init([]) ->
 %% gen_event:notify/2 or gen_event:sync_notify/2, this function is called for
 %% each installed event handler to handle the event.
 %%--------------------------------------------------------------------
+
+handle_event({msg_arrived_res, WCN, RN, PID, Length, Timestamp}, State) ->
+	T = fun() ->
+			mnesia:write(#wcn_detailed_stats{wcn = WCN, rn = RN, type = reservation, partid = PID, 
+					msglength = Length, timestamp = Timestamp})
+	end,
+	{atomic, ok} = mnesia:transaction(T),
+	{ok, State};
+
+handle_event({msg_arrived, WCN, RN, PID, Length, Timestamp}, State) ->
+	T = fun() ->
+			mnesia:write(#wcn_detailed_stats{wcn = WCN, rn = RN, type = normal, partid = PID, 
+					msglength = Length, timestamp = Timestamp})
+	end,
+	{atomic, ok} = mnesia:transaction(T),
+	{ok, State};
+
+handle_event(dump_to_csv, State) ->
+	T = fun() ->
+			qlc:e( qlc:q([ X || X <- mnesia:table(wcn_detailed_stats)]))
+		end,
+	case mnesia:transaction(T) of
+			{atomic, AList} ->
+					Filename = ["log/detailed-log-"|integer_to_list(util:mk_timestamp_us())],
+					{ok, IODevice} = file:open(Filename, [append]),
+					io:format(IODevice, " wcn, rn, msglength, partid, timestamp~n", []),
+					lists:foreach( fun(X) -> 
+										N1 = X#wcn_detailed_stats.wcn        , N2 = X#wcn_detailed_stats.rn ,
+										N3 = X#wcn_detailed_stats.msglength  , N4 = X#wcn_detailed_stats.partid,
+										N5 = X#wcn_detailed_stats.timestamp  , 
+										io:format(IODevice, "~w, ~w, ~w, ~w, ~w~n", 
+											[N1, N2, N3, N4, N5]) end, AList),
+					file:close(IODevice);
+			Error -> 
+				error_logger:error_msg("Error reading detailed statistics database: ~w ~n", [Error])
+	end,
+	{ok, State};
+
 handle_event(_Event, State) ->
   {ok, State}.
 
