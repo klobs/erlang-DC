@@ -140,6 +140,7 @@ status() ->
 init([]) ->
 	workcycle_evt_mgr:start_link(),
 	workcycle_evt_mgr:add_handler(workcycle_total_evt_hdlr),
+	workcycle_evt_mgr:add_handler(workcycle_detailed_evt_hdlr),
 	util:safe_mnesia_create_table( init, 
 					[{disc_copies, [node()]}, 
 								{attributes, record_info(fields, init)}]),
@@ -258,6 +259,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
 	io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
+	workcycle_evt_mgr:notify({msg_arrived_res, W, R, C, 96, util:mk_timestamp_us()}),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, <<AddMsg:96>>),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
@@ -376,6 +378,7 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
 	%io:format("[sending]: Add message arrived for ~w ~n",[C]),
+	workcycle_evt_mgr:notify({msg_arrived, W, R, C, size(AddMsg), util:mk_timestamp_us()}),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, AddMsg),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
