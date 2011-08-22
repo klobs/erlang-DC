@@ -2,8 +2,8 @@
 -define(PROTOCOL_VERSION        , 1).
 -define(SYMBOL_LENGTH           , 1024).
 -define(MIN_ACTIVE_PARTICIPANTS , 3).
--define(DEFAULTTICKTIMEOUT      , 500).
--define(DEFAULTRTTIMEOUT        , infinity).
+-define(DEFAULTTICKTIMEOUT      , 20).
+-define(DEFAULTRTTIMEOUT        , 2000).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Different Features of a server

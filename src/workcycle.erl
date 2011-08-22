@@ -825,29 +825,21 @@ startup_test_and_store_wcn(WCN) when (WCN rem ?WCN_GUARD) =:= 0 ->
 startup_test_and_store_wcn(_WCN) ->
 	ok.
 
-reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
-			<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
-	%io:format("-1, _, 1, ~w, _~n",[IndividualMessageLength]),
+reservation_evaluate_reservation(-1, _IndividualMessageLengths , <<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
 	{finished, {iml, [IndividualMessageLength]}};
-reservation_evaluate_reservation(-1, _Confirmed ,
-					<<_:112, 0:32, _IndividualLength:32, _Random:32>>) ->
-	%io:format("-1, _, 0, _, _~n"),
+reservation_evaluate_reservation(-1, _Confirmed , <<_:112, 0:32, _IndividualLength:32, _Random:32>>) ->
 	{finished, {iml,[]}};
-reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, 
-								<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) 
+reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, <<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) 
 	when length(IndividualMessageLengths) == (ExpectedRounds - 1) ->
-	%io:format("~w, ~w, 1, ~w, _~n",[ExpectedRounds, IndividualMessageLengths,IndividualMessageLength]),
 	{finished, {iml,lists:reverse([IndividualMessageLength|IndividualMessageLengths])}};
-reservation_evaluate_reservation(_ExpectedRounds, IndividualMessageLengths, 
-								<<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
-	%io:format("_, ~w, 1, ~w, _~n",[IndividualMessageLengths,IndividualMessageLength]),
+reservation_evaluate_reservation(_ExpectedRounds, IndividualMessageLengths, <<_:112, 1:32, IndividualMessageLength:32, _Random:32>>) ->
 	{not_finished, {iml,[IndividualMessageLength|IndividualMessageLengths]}};
-reservation_evaluate_reservation(-1, _IndividualMessageLengths ,
-						<<_:112, ParticipantCount:32, _IndividualLength:32, _Random:32>>) ->
-	%io:format("-1, _, ~w, _, _~n",[ParticipantCount]),
+reservation_evaluate_reservation(-1, _IndividualMessageLengths , <<_:112, ParticipantCount:32, _IndividualLength:32, _Random:32>>) ->
 	{not_finished, {ec,ParticipantCount}};
+reservation_evaluate_reservation(ExpectedRounds, _IndividualMessageLengths , <<_:112, ParticipantCount:32, _IndividualLength:32, _Random:32>>) when (ExpectedRounds > ParticipantCount) ->
+	{not_finished};
 reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, AddMsg) ->
 	io:format("[reservation_evaluator]: Error: Expr ~w, Indiv ~w, Addm ~w~n", 
 		[ExpectedRounds, IndividualMessageLengths, AddMsg]),
-	io:get_line("reservation_evaluator:"),
+	_ = io:get_line("reservation_evaluator:"),
 	{not_finished}.
