@@ -553,10 +553,11 @@ handle_event({unregister, Part}, StateName, State) when is_record(Part, particip
 	CWN = State#state.current_workcycle,
 	case generic_is_participant_active(Part, CWN) of
 		true -> 
-			io:format("Participant is active~n"),
+			io:format("[handle_event][unregister participant]: Participant is active~n"),
 			APartConL = generic_get_active_participant_list(CWN),
 			{_APartL, AConL} = lists:unzip(APartConL),
-			io:format("Sending info early quit to ~w~n", [AConL]),
+			io:format("[handle_event][unregister participant]: Sending info early quit to ~w~n", 
+				[AConL]),
 			generic_send_info_early_quit_service(Part, CWN, State#state.current_round_number, AConL),
 			generic_unregister_passive_participant(Part),
 			NState = #state{current_workcycle = CWN +1,
@@ -568,7 +569,7 @@ handle_event({unregister, Part}, StateName, State) when is_record(Part, particip
 			gen_fsm:send_event(?MODULE, start),
 			{next_state, startup, NState};
 		false -> 
-			io:format("Participant is not active~n"),
+			io:format("[handle_event][unregister participant]: Participant is not active~n"),
 			generic_unregister_passive_participant(Part),
 			{next_state, StateName, State}
 	end;

@@ -62,8 +62,6 @@ listen(Sock, Part, RTMsgHndlr, IncompleteMessage) ->
 			listen(Sock,Part, RTMsgHndlr, IncompleteMessage)
 	end.
 
-construct_and_parse_messages(_Sock, _Part, _RTMsgHndlr, OldDataBin, <<>>) ->
-	OldDataBin;
 construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, <<MsgType:16, MsgLen:16, MsgBin:MsgLen/binary, Rest/binary>>) ->
 	case management_message:parse_message(<<MsgType:16>>, MsgBin) of
 		{irq, Irq} -> 
@@ -79,9 +77,17 @@ construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, <<MsgType:16, MsgLen:
 			io:format("Parseerror happended during message parsing: ~w!~n",[Reason])
 	end,
 	construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, Rest);
+construct_and_parse_messages(_Sock, _Part, _RTMsgHndlr, OldDataBin, <<>>) ->
+construct_and_parse_messages(Sock, _Part, _RTMsgHndlr, OldDataBin, <<>>) ->
+	%io:format("[connection][construct]: new data for ~w is not an entire message ~n",[Sock]),
+	OldDataBin;
+construct_and_parse_messages(_Sock, _Part, _RTMsgHndlr, <<>>, <<Incomplete/binary>>) ->
+	Incomplete;
 construct_and_parse_messages(Sock, Part, RTMsgHndlr, OldDataBin, <<Incomplete/binary>>) ->
 	NewData = list_to_binary([OldDataBin, Incomplete]),
-	construct_and_parse_messages(Sock, Part, RTMsgHndlr, NewData, <<>>).
+	%NewDataSize = size(NewData),
+	%io:format("[connection][construct]: Old data still available. Lets join them and see whether we have a new message! (Length ~w):~n ~w ~n", [NewDataSize, NewData]),
+	construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, NewData).
 
 handle_irq(passivelist) ->
 	workcycle:send_passive_partlist(self());
