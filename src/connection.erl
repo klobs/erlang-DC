@@ -40,8 +40,8 @@ listen(Sock, Part, RTMsgHndlr, IncompleteMessage) ->
 			workcycle:unregister_participant(Part),
 			ok;
 		{tcp, Sock, Data} ->
-			IncompleteMessage = construct_and_parse_messages(Sock, Part, RTMsgHndlr, IncompleteMessage, Data),
-			listen(Sock,Part, RTMsgHndlr, IncompleteMessage);
+			IncompleteMessageNew = construct_and_parse_messages(Sock, Part, RTMsgHndlr, IncompleteMessage, Data),
+			listen(Sock,Part, RTMsgHndlr, IncompleteMessageNew);
 		%% Messages from other processes to forward to the socket
 		{forward_to_participant, {msg,Msg}} when is_binary(Msg)->
 			gen_tcp:send(Sock, Msg),
