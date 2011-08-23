@@ -110,7 +110,7 @@ handle_event(dump_to_csv, State) ->
 		end,
 	case mnesia:transaction(T) of
 			{atomic, AList} ->
-					Filename = ["log/log-"|integer_to_list(util:mk_timestamp_us())],
+					Filename = ["log/total_log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
 					io:format(IODevice, "wcn,wc_start, wc_stop, res_start, res_stop, send_start, send_stop, count_active, count_joining, count_kicked, count_leaving, count_rounds~n", []),
 					lists:foreach( fun(X) -> 
