@@ -1,8 +1,8 @@
 %% General config options
 -define(PROTOCOL_VERSION        , 1).
--define(SYMBOL_LENGTH           , 1024).
+-define(SYMBOL_LENGTH           , 65000).
 -define(MIN_ACTIVE_PARTICIPANTS , 3).
--define(DEFAULTTICKTIMEOUT      , 20).
+-define(DEFAULTTICKTIMEOUT      , 10).
 -define(DEFAULTRTTIMEOUT        , 2000).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -40,8 +40,8 @@
 						{?FEATURE_KEG, ?KEG_POBAB_FAIL_STOP_WC}, 
 						{?FEATURE_LCH, ?LCH_NONE}, 
 						{?FEATURE_KEX, ?KEX_FULLY_AUTOMATIC},
-						{?FEATURE_VPL, ?VPL_VARIABLE},
-						{?FEATURE_EQR, ?EQR_MUST_NOT_HAPPEN}
+						{?FEATURE_VPL, ?VPL_FIXED},
+						{?FEATURE_EQR, ?EQR_RESTART_WC}
 					]).
 %% Records
 -record(participant, {  participantid    = undefined,
