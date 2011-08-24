@@ -78,7 +78,6 @@ construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, <<MsgType:16, MsgLen:
 	end,
 	construct_and_parse_messages(Sock, Part, RTMsgHndlr, <<>>, Rest);
 construct_and_parse_messages(_Sock, _Part, _RTMsgHndlr, OldDataBin, <<>>) ->
-construct_and_parse_messages(Sock, _Part, _RTMsgHndlr, OldDataBin, <<>>) ->
 	%io:format("[connection][construct]: new data for ~w is not an entire message ~n",[Sock]),
 	OldDataBin;
 construct_and_parse_messages(_Sock, _Part, _RTMsgHndlr, <<>>, <<Incomplete/binary>>) ->
