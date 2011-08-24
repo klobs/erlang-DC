@@ -384,7 +384,8 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
 	case length(NExpdPartConsL) == 0 of
 		true -> 
-			io:format("[sending]: broadcast ~w~n", [NLocalSum]),
+			io:format("[sending]: broadcast ~n"),
+			%io:format("[sending]: broadcast ~w~n", [NLocalSum]),
 			AddedMsg = management_message:added(State#state.current_workcycle, 
 											State#state.current_round_number, NLocalSum),
 			%io:format("[sending]: Unzipping lists~n"),
