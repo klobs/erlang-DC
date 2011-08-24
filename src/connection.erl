@@ -4,7 +4,10 @@
 
 welcome(Sock) ->
 	NumPart = workcycle:passive_participant_count(),
-	W2M = management_message:welcome2service(?PROTOCOL_VERSION, ?SYMBOL_LENGTH,NumPart, 0, ?FEATURE_LIST),
+	W2M = management_message:welcome2service(?PROTOCOL_VERSION, 
+											config:get_symbol_length(),
+											NumPart, 
+											0, config:get_feature_list()),
 	case gen_tcp:send(Sock, W2M) of
 		ok -> 
 			case gen_tcp:recv(Sock, 2, 2000) of

@@ -11,7 +11,6 @@
          terminate/2, code_change/3]).
 
 % basic definitions
--define(DEFAULTPORT, 6867).
 -define(TCPOPTIONS, [binary, 
 					{packet, 0}, 
 					{active, false}, 
