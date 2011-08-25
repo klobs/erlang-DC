@@ -18,7 +18,9 @@ welcome(Sock) ->
 								case gen_tcp:recv(Sock, Length, 100) of
 									{ok, MsgBin} -> 
 										{register_at_service, Part} = management_message:parse_message(MsgTypeBin, MsgBin),
-										workcycle:register_participant(Part, self()),
+										{ok, Peername} = inet:peername(Sock),
+										io:format("~w connected~n",[Peername]),
+										workcycle:register_participant(Part, self(), Peername),
 										AMHPid = spawn_link(rt_message_handler, rt_message_handler, [{wait, 
 													{part, Part}, {con, self()}, {wcn, -1},{bufferlist,[]}}]),
 										listen(Sock, Part, AMHPid, <<>>),

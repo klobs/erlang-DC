@@ -53,5 +53,6 @@
 
 -record(participant_mgmt, { participant  = #participant{},
 							controller   = undefined,
+							peername     = undefined,
 							active_from  = -1,
 							active_until = -1}).

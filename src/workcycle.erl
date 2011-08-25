@@ -9,7 +9,7 @@
 		leave_workcycle/3,
 		force_next_tick/0,
 		get_passive_participant_list/0,
-		register_participant/2,
+		register_participant/3,
 		passive_participant_count/0,
 		send_active_partlist/1,
 		send_passive_partlist/1,
@@ -79,8 +79,8 @@ get_passive_participant_list() ->
 passive_participant_count() ->
 	gen_fsm:sync_send_all_state_event(?MODULE, count_passive_participants).
 
-register_participant(Part, Controller) ->
-	gen_fsm:send_all_state_event(?MODULE, {register, {Part, Controller}}).
+register_participant(Part, Controller, Peername) ->
+	gen_fsm:send_all_state_event(?MODULE, {register, {Part, Controller, Peername}}).
 
 send_active_partlist(Controller) ->
 	gen_fsm:send_all_state_event(?MODULE, {send_active_partlist, Controller}).
@@ -154,7 +154,7 @@ init([]) ->
 	{atomic, Initial_wcn} = mnesia:transaction(T),
 	util:safe_mnesia_create_table( participant_mgmt, 
 					[{attributes, record_info(fields, participant_mgmt)}]),
-	mnesia:add_table_index(participant_mgmt, active_from),
+	mnesia:add_table_index(articipant_mgmt, active_from),
 	{ok, waiting, #state{current_workcycle = Initial_wcn + ?WCN_GUARD + 1}}.
 
 %%--------------------------------------------------------------------
@@ -259,7 +259,8 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
 	io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
-	workcycle_evt_mgr:notify({msg_arrived_res, W, R, C, 96, util:mk_timestamp_us()}),
+	Peername = generic_get_peername(P),
+	workcycle_evt_mgr:notify({msg_arrived_res, W, R, Peername, 96, util:mk_timestamp_us()}),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, <<AddMsg:96>>),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
@@ -378,7 +379,8 @@ sending({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, AddMsg}}, State)
 				(W == State#state.current_workcycle) and 
 				(R == State#state.current_round_number) ->
 	%io:format("[sending]: Add message arrived for ~w ~n",[C]),
-	workcycle_evt_mgr:notify({msg_arrived, W, R, C, size(AddMsg), util:mk_timestamp_us()}),
+	Peername = generic_get_peername(P),
+	workcycle_evt_mgr:notify({msg_arrived, W, R, Peername, size(AddMsg), util:mk_timestamp_us()}),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, AddMsg),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],
@@ -523,14 +525,14 @@ handle_event({leaveworkcycle, {Part, _Controller, WCN}}, StateName, State) ->
 	mnesia:transaction(F),
 	{next_state, StateName, State};
 
-handle_event({register, {Part, Controller}}, StateName, State) when is_record(Part, participant) ->
+handle_event({register, {Part, Controller, Peername}}, StateName, State) when is_record(Part, participant) ->
 	T = fun() ->
 		R = mnesia:wread({participant_mgmt, Part}),
 		case R of
 			[] -> 
 				M = management_message:accepted4service(true),
 				Controller ! {forward_to_participant, {msg,M}},
-				PMI = #participant_mgmt{ participant = Part, controller = Controller },
+				PMI = #participant_mgmt{ participant = Part, controller = Controller, peername = Peername},
 				mnesia:write(PMI),
 				ok;
 			_E -> 
@@ -713,6 +715,19 @@ generic_get_leaving_participant_list(CurrentWorkcycle) ->
 		end,
 	{atomic, LList} = mnesia:transaction(AT),
 	LList.
+
+generic_get_peername(Part) ->
+	PT = fun() ->
+			mnesia:read(participant_mgmt, Part, read)
+		end,
+	case mnesia:transaction(PT) of 
+		{atomic, []} ->
+			undefined;
+		{atomic, [PMI]} ->
+			PMI#participant_mgmt.peername;
+		_Error ->
+			undefined
+	end.
 
 generic_is_participant_active(Participant, CurrentWorkcycle) ->
 	AT = fun() ->

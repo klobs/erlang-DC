@@ -9,7 +9,7 @@
 			rn             ,
 			type           ,
 			msglength      ,
-			partid         ,
+			peername         ,
 			timestamp }).
 
 
@@ -53,17 +53,17 @@ init([]) ->
 %% each installed event handler to handle the event.
 %%--------------------------------------------------------------------
 
-handle_event({msg_arrived_res, WCN, RN, PID, Length, Timestamp}, State) ->
+handle_event({msg_arrived_res, WCN, RN, Peername, Length, Timestamp}, State) ->
 	T = fun() ->
-			mnesia:write(#wcn_detailed_stats{wcn = WCN, rn = RN, type = reservation, partid = PID, 
+			mnesia:write(#wcn_detailed_stats{wcn = WCN, rn = RN, type = reservation, peername = Peername, 
 					msglength = Length, timestamp = Timestamp})
 	end,
 	{atomic, ok} = mnesia:transaction(T),
 	{ok, State};
 
-handle_event({msg_arrived, WCN, RN, PID, Length, Timestamp}, State) ->
+handle_event({msg_arrived, WCN, RN, Peername, Length, Timestamp}, State) ->
 	T = fun() ->
-			mnesia:write(#wcn_detailed_stats{wcn = WCN, rn = RN, type = normal, partid = PID, 
+			mnesia:write(#wcn_detailed_stats{wcn = WCN, rn = RN, type = normal, peername = Peername, 
 					msglength = Length, timestamp = Timestamp})
 	end,
 	{atomic, ok} = mnesia:transaction(T),
@@ -77,10 +77,10 @@ handle_event(dump_to_csv, State) ->
 			{atomic, AList} ->
 					Filename = ["log/detailed-log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
-					io:format(IODevice, " wcn, rn, msglength, partid, timestamp~n", []),
+					io:format(IODevice, " wcn, rn, msglength, peername, timestamp~n", []),
 					lists:foreach( fun(X) -> 
 										N1 = X#wcn_detailed_stats.wcn        , N2 = X#wcn_detailed_stats.rn ,
-										N3 = X#wcn_detailed_stats.msglength  , N4 = X#wcn_detailed_stats.partid,
+										N3 = X#wcn_detailed_stats.msglength  , N4 = X#wcn_detailed_stats.peername,
 										N5 = X#wcn_detailed_stats.timestamp  , 
 										io:format(IODevice, "~w, ~w, ~w, ~w, ~w~n", 
 											[N1, N2, N3, N4, N5]) end, AList),
