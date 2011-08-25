@@ -100,7 +100,7 @@ handle_event({count_leaving, WCN, Count}, State) ->
 	{ok, State};
 
 handle_event({count_rounds, WCN, Count}, State) ->
-	count_rounds(WCN, Count),
+	count_rounds(WCN, Count + 1),
 	{ok, State};
 
 handle_event(dump_to_csv, State) ->
