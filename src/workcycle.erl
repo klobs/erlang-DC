@@ -155,7 +155,8 @@ init([]) ->
 	util:safe_mnesia_create_table( participant_mgmt, 
 					[{attributes, record_info(fields, participant_mgmt)}]),
 	mnesia:add_table_index(articipant_mgmt, active_from),
-	{ok, waiting, #state{current_workcycle = Initial_wcn + ?WCN_GUARD + 1}}.
+	{ok, waiting, #state{current_workcycle = Initial_wcn + ?WCN_GUARD + 1,
+							ticktimeout = config:get_tick_timeout()}}.
 
 %%--------------------------------------------------------------------
 %% Function:
