@@ -177,12 +177,12 @@ waiting({joinworkcycle, {_Part, _Controller} = PartController}, State) ->
 	NewState = State#state{participants_joining = NewPartJoining},
 	CurrentWorkcycle = State#state.current_workcycle,
 	AList = generic_get_active_participant_list(CurrentWorkcycle),
-	case (length(AList) >= ?MIN_ACTIVE_PARTICIPANTS) of
+	case (length(AList) >= config:get_min_active_participants()) of
 		true -> 
 			%% this can not be true and we have to restart
 			{next_state, waiting, #state{}};
 		false ->
-			case (length(NewPartJoining) + length(AList) >= ?MIN_ACTIVE_PARTICIPANTS) of
+			case (length(NewPartJoining) + length(AList) >= config:get_min_active_participants()) of
 				true -> 
 						gen_fsm:send_event(?MODULE, start),
 						{next_state, startup, NewState};
@@ -217,7 +217,7 @@ startup(start, State) ->
 	startup_set_participants_inactive(LPartL),
 	startup_send_iujp(JPartL, CurrentWorkcycle, NExpdConsL),
 	startup_set_participants_active(JPartL, CurrentWorkcycle),
-	case length(NExpdPartConsL) >= ?MIN_ACTIVE_PARTICIPANTS of
+	case length(NExpdPartConsL) >= config:get_min_active_participants() of
 		true ->
 			F = fun() ->
 					receive 
