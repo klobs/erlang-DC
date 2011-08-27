@@ -14,20 +14,10 @@
 
 
 %% API
--export([dump_to_csv/0]).
 
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2,
          handle_info/2, terminate/2, code_change/3]).
-
-%%====================================================================
-%% API
-%%====================================================================
-%%--------------------------------------------------------------------
-%%--------------------------------------------------------------------
-
-dump_to_csv() ->
-	workcycle_evt_mgr:notify(dump_to_csv).
 
 %%====================================================================
 %% gen_event callbacks
@@ -77,13 +67,13 @@ handle_event(dump_to_csv, State) ->
 			{atomic, AList} ->
 					Filename = ["log/detailed-log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
-					io:format(IODevice, " wcn, rn, msglength, peername, timestamp~n", []),
+					io:format(IODevice, " wcn,rn,msgtype,msglength,peername,timestamp~n", []),
 					lists:foreach( fun(X) -> 
 										N1 = X#wcn_detailed_stats.wcn        , N2 = X#wcn_detailed_stats.rn ,
-										N3 = X#wcn_detailed_stats.msglength  , N4 = X#wcn_detailed_stats.peername,
-										N5 = X#wcn_detailed_stats.timestamp  , 
-										io:format(IODevice, "~w, ~w, ~w, ~w, ~w~n", 
-											[N1, N2, N3, N4, N5]) end, AList),
+										N3 = X#wcn_detailed_stats.type       , N4 = X#wcn_detailed_stats.msglength,
+										N5 = X#wcn_detailed_stats.peername   , N6 = X#wcn_detailed_stats.timestamp  , 
+										io:format(IODevice, "~w,~w,~w,~w,~w,~w~n", 
+											[N1, N2, N3, N4, N5, N6]) end, AList),
 					file:close(IODevice);
 			Error -> 
 				error_logger:error_msg("Error reading detailed statistics database: ~w ~n", [Error])

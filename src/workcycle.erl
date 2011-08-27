@@ -261,7 +261,7 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 				(R == State#state.current_round_number) ->
 	io:format("[reservation]: Add message arrived for ~w ~w~n",[C,AddMsg]),
 	Peername = generic_get_peername(P),
-	workcycle_evt_mgr:notify({msg_arrived_res, W, R, Peername, 96, util:mk_timestamp_us()}),
+	workcycle_evt_mgr:notify({msg_arrived_res, W, R, Peername, 12, util:mk_timestamp_us()}),
 	NLocalSum = generic_add_up_dcmsg(State#state.add_up_msg, <<AddMsg:96>>),
 	NExpdPartConsL = lists:delete({P,C}, State#state.participants_expected),
 	NConfPartConsL = [{P,C}| State#state.participants_confirmed],

@@ -20,20 +20,10 @@
 
 
 %% API
--export([dump_to_csv/0]).
 
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2,
          handle_info/2, terminate/2, code_change/3]).
-
-%%====================================================================
-%% API
-%%====================================================================
-%%--------------------------------------------------------------------
-%%--------------------------------------------------------------------
-
-dump_to_csv() ->
-	workcycle_evt_mgr:notify(dump_to_csv).
 
 %%====================================================================
 %% gen_event callbacks
@@ -111,7 +101,7 @@ handle_event(dump_to_csv, State) ->
 			{atomic, AList} ->
 					Filename = ["log/total-log-"|integer_to_list(util:mk_timestamp_us())],
 					{ok, IODevice} = file:open(Filename, [append]),
-					io:format(IODevice, "wcn,wc_start, wc_stop, res_start, res_stop, send_start, send_stop, count_active, count_joining, count_kicked, count_leaving, count_rounds~n", []),
+					io:format(IODevice, "wcn,wc_start,wc_stop,res_start,res_stop,send_start,send_stop,count_active,count_joining,count_kicked,count_leaving,count_rounds~n", []),
 					lists:foreach( fun(X) -> 
 										N1 = X#wcn_total_stats.wcn            , N2 = X#wcn_total_stats.wc_start     ,
 										N3 = X#wcn_total_stats.wc_stop        , N4 = X#wcn_total_stats.res_start    ,
