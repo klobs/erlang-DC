@@ -340,11 +340,11 @@ reservation({add, {part, P}, {con, C}, {wcn, W}, {rn, R}, {addmsg, <<AddMsg:96>>
 					generic_send_to_connections(NConfConsL, 
 						{ 
 						wait_for_realtime_msg, {wcn, W}, 
-						{rn, 0}, {timeout, State#state.rtmsgtimeout}}),
+						{rn, R+1}, {timeout, State#state.rtmsgtimeout}}),
 					NextMsgLengthBits = NextMsgLengthBytes * 8,	
 					NewState = State#state{
 						add_up_msg                 = <<0:NextMsgLengthBits>>,
-						current_round_number       = 0,
+						current_round_number       = R + 1,
 						participants_expected      = NConfPartConsL,
 						participants_confirmed     = [],
 						individual_message_lengths = RestMessages},
@@ -860,4 +860,5 @@ reservation_evaluate_reservation(ExpectedRounds, IndividualMessageLengths, AddMs
 	io:format("[reservation_evaluator]: Error: Expr ~w, Indiv ~w, Addm ~w~n", 
 		[ExpectedRounds, IndividualMessageLengths, AddMsg]),
 	_ = io:get_line("reservation_evaluator:"),
+	timer:sleep(100),
 	{not_finished}.
